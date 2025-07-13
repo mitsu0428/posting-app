@@ -1,0 +1,37 @@
+# Google Cloud Run用 Dockerfile (Frontend) 
+FROM node:20-alpine AS builder
+
+# ワーキングディレクトリを設定
+WORKDIR /app
+
+# package.jsonとpackage-lock.jsonをコピー
+COPY package*.json ./
+
+# 依存関係をインストール
+RUN npm ci --legacy-peer-deps --silent
+
+# ソースコードをコピー
+COPY . .
+
+# Panda CSSのビルドとReactアプリのビルド
+RUN npm run panda
+RUN npm run build
+
+# 本番用nginx
+FROM nginx:alpine
+
+# nginxの設定ファイルをコピー
+COPY nginx.cloudrun.conf /etc/nginx/nginx.conf
+
+# ビルドされたアプリをnginxのルートディレクトリにコピー
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# ポートを公開
+EXPOSE 8080
+
+# ヘルスチェック
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+
+# nginxを起動
+CMD ["nginx", "-g", "daemon off;"]

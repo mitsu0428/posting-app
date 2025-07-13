@@ -1,0 +1,63 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15
+    container_name: posting-app-db
+    environment:
+      POSTGRES_DB: posting_app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: posting_app_secure_password_2024
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432" # 任意（開発用）
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d posting_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    container_name: posting-app-backend
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: posting_app_secure_password_2024
+      DB_NAME: posting_app
+      JWT_SECRET: posting_app_jwt_secret_key_very_secure_2024_change_in_production
+      STRIPE_SECRET_KEY: sk_test_51234567890abcdefghijklmnopqrstuvwxyz
+      STRIPE_WEBHOOK_SECRET: whsec_1234567890abcdefghijklmnopqrstuvwxyz
+      FRONTEND_URL: http://localhost:3000
+      PORT: 8080
+      GO_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    container_name: posting-app-frontend
+    build:
+      context: .
+      dockerfile: ./front/Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_URL: http://localhost:8080/api
+      REACT_APP_STRIPE_PUBLISHABLE_KEY: pk_test_51234567890abcdefghijklmnopqrstuvwxyz
+      DISABLE_ESLINT_PLUGIN: true
+      GENERATE_SOURCEMAP: false
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
