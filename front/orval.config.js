@@ -1,31 +1,25 @@
 module.exports = {
-  'posting-app-api': {
+  'posting-app': {
     input: '../api/schema.yaml',
     output: {
-      target: 'src/generated/api.ts',
-      client: 'axios',
       mode: 'split',
+      target: 'src/generated/api.ts',
       schemas: 'src/generated/models',
+      client: 'react-query',
+      mock: false,
+      clean: true,
+      prettier: true,
       override: {
         mutator: {
           path: './src/utils/api-mutator.ts',
-          name: 'apiMutator',
+          name: 'customInstance',
         },
-        operations: {
-          // 認証が必要なエンドポイントにはデフォルトでBearer tokenを使用
-          Auth: {
-            'Auth.login': {
-              mutator: './src/utils/api-mutator.ts',
-            },
-            'Auth.register': {
-              mutator: './src/utils/api-mutator.ts',
-            },
-          },
+        query: {
+          useQuery: true,
+          useMutation: true,
+          signal: true,
         },
       },
-    },
-    hooks: {
-      afterAllFilesWrite: 'prettier --write',
     },
   },
 };

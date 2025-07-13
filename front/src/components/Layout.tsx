@@ -1,73 +1,153 @@
-import React, { ReactNode } from 'react';
+import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-// import { css } from '../../styled-system/css';
-// import { flex, container } from '../../styled-system/patterns';
+import { authApi } from '../utils/api';
 
 interface LayoutProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      logout();
+      navigate('/login');
+    }
   };
 
-  // Temporary basic styles
-  const navStyles = 'bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50 mb-8';
-  const navContainerStyles = 'max-w-7xl mx-auto py-4 px-6';
-  const navContentStyles = 'flex justify-between items-center';
-  const logoStyles = 'text-xl font-bold text-blue-600 no-underline';
-  const navLinksStyles = 'flex gap-6 items-center';
-  const navLinkStyles = 'text-gray-600 no-underline px-3 py-2 rounded-md';
-  const userInfoStyles = 'text-gray-700 text-sm px-3';
-  const logoutButtonStyles = 'bg-red-500 text-white px-4 py-2 rounded-md border-none cursor-pointer text-sm font-medium';
-  const mainContentStyles = 'max-w-7xl mx-auto px-6 py-4';
-
   return (
-    <div>
-      <nav className={navStyles}>
-        <div className={navContainerStyles}>
-          <div className={navContentStyles}>
-            <div>
-              <Link to="/home" className={logoStyles}>
-    掲示板アプリ
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <header
+        style={{
+          backgroundColor: '#2563eb',
+          color: 'white',
+          padding: '1rem 2rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+          <Link
+            to="/"
+            style={{
+              color: 'white',
+              textDecoration: 'none',
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+            }}
+          >
+            Posting App
+          </Link>
+          
+          {user && (
+            <nav style={{ display: 'flex', gap: '1rem' }}>
+              <Link
+                to="/"
+                style={{ color: 'white', textDecoration: 'none' }}
+              >
+                Home
               </Link>
-            </div>
-            <div className={navLinksStyles}>
-              <Link to="/home" className={navLinkStyles}>
-ホーム
+              <Link
+                to="/create-post"
+                style={{ color: 'white', textDecoration: 'none' }}
+              >
+                Create Post
               </Link>
-              <Link to="/create-post" className={navLinkStyles}>
-投稿作成
+              <Link
+                to="/my-page"
+                style={{ color: 'white', textDecoration: 'none' }}
+              >
+                My Page
               </Link>
-              <Link to="/my-page" className={navLinkStyles}>
-マイページ
+              <Link
+                to="/subscription"
+                style={{ color: 'white', textDecoration: 'none' }}
+              >
+                Subscription
               </Link>
-              {user?.is_admin && (
-                <Link to="/admin" className={navLinkStyles}>
-管理者画面
+              {user.role === 'admin' && (
+                <Link
+                  to="/admin"
+                  style={{ color: 'white', textDecoration: 'none' }}
+                >
+                  Admin
                 </Link>
               )}
-              <span className={userInfoStyles}>
-                こんにちは、{user?.username}さん
-              </span>
-              <button onClick={handleLogout} className={logoutButtonStyles}>
-                ログアウト
-              </button>
-            </div>
-          </div>
+            </nav>
+          )}
         </div>
-      </nav>
-      <div className={mainContentStyles}>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {user ? (
+            <>
+              <span>Welcome, {user.display_name}</span>
+              <button
+                onClick={handleLogout}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: '1px solid white',
+                  color: 'white',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.25rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <Link
+                to="/login"
+                style={{
+                  color: 'white',
+                  textDecoration: 'none',
+                  padding: '0.5rem 1rem',
+                  border: '1px solid white',
+                  borderRadius: '0.25rem',
+                }}
+              >
+                Login
+              </Link>
+              <Link
+                to="/register"
+                style={{
+                  backgroundColor: 'white',
+                  color: '#2563eb',
+                  textDecoration: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.25rem',
+                }}
+              >
+                Register
+              </Link>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <main style={{ flex: 1, padding: '2rem' }}>
         {children}
-      </div>
+      </main>
+
+      <footer
+        style={{
+          backgroundColor: '#f3f4f6',
+          padding: '1rem 2rem',
+          textAlign: 'center',
+          borderTop: '1px solid #e5e7eb',
+        }}
+      >
+        <p>&copy; 2024 Posting App. All rights reserved.</p>
+      </footer>
     </div>
   );
 };
-
-export default Layout;

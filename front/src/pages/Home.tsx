@@ -1,147 +1,255 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
-import Layout from "../components/Layout";
-import { postsAPI } from "../utils/api";
-import type { Post } from "../types";
-// import { css } from '../../styled-system/css';
-// import { flex, grid } from '../../styled-system/patterns';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { postApi } from '../utils/api';
+import { Post } from '../types';
+import { useAuth } from '../context/AuthContext';
 
-const Home: React.FC = () => {
+export const Home: React.FC = () => {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string>('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const limit = 10;
 
-  const loadPosts = useCallback(async () => {
+  const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await postsAPI.getPosts(page, 20);
-      setPosts(response.posts);
-      setTotal(response.total);
-    } catch (err) {
-      setError("投稿の読み込みに失敗しました");
+      setError('');
+      const response = await postApi.getPosts(page, limit);
+      
+      // Handle the response structure safely
+      if (response && typeof response === 'object') {
+        const postsData = response.data || [];
+        const totalCount = response.total || 0;
+        
+        setPosts(Array.isArray(postsData) ? postsData : []);
+        setTotal(totalCount);
+      } else {
+        setPosts([]);
+        setTotal(0);
+      }
+    } catch (err: any) {
+      console.error('Error fetching posts:', err);
+      setError(err.message || 'Failed to fetch posts');
+      setPosts([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, limit]);
 
   useEffect(() => {
-    loadPosts();
-  }, [page, loadPosts]);
+    if (!authLoading) {
+      if (isAuthenticated) {
+        fetchPosts();
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [page, isAuthenticated, authLoading, fetchPosts]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("ja-JP", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const totalPages = Math.ceil(total / limit);
 
-  // Temporary basic styles
-  const loadingStyles = "text-center py-12 text-gray-600 text-lg";
-  const errorStyles =
-    "bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg text-center";
-  const titleStyles = "text-3xl font-bold text-gray-900 mb-8 text-center";
-  const emptyStyles =
-    "text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300";
-  const postsGridStyles =
-    "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8";
-  const postCardStyles = "bg-white rounded-xl shadow-md overflow-hidden";
-  const postImageStyles = "w-full h-48 object-cover";
-  const postContentStyles = "p-6";
-  const postTitleStyles =
-    "text-xl font-bold text-blue-600 no-underline mb-3 block";
-  const postMetaStyles = "text-gray-500 text-sm mb-3";
-  const postExcerptStyles = "text-gray-700 leading-relaxed overflow-hidden";
-  const paginationStyles = "flex justify-center items-center gap-4 mt-8";
-  const pageButtonStyles =
-    "px-4 py-2 rounded-md border-none cursor-pointer text-sm font-medium";
-  const pageButtonActiveStyles = "bg-blue-600 text-white";
-  const pageInfoStyles = "text-gray-600 text-sm px-4";
-
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <Layout>
-        <div className={loadingStyles}>読み込み中...</div>
-      </Layout>
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div>Loading posts...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <h2>Welcome to Posting App</h2>
+        <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
+          Please log in to view and create posts.
+        </p>
+        <Link
+          to="/login"
+          style={{
+            backgroundColor: '#2563eb',
+            color: 'white',
+            padding: '0.75rem 1.5rem',
+            textDecoration: 'none',
+            borderRadius: '0.375rem',
+            fontWeight: '500',
+            marginRight: '1rem',
+          }}
+        >
+          Log In
+        </Link>
+        <Link
+          to="/register"
+          style={{
+            backgroundColor: '#6b7280',
+            color: 'white',
+            padding: '0.75rem 1.5rem',
+            textDecoration: 'none',
+            borderRadius: '0.375rem',
+            fontWeight: '500',
+          }}
+        >
+          Sign Up
+        </Link>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Layout>
-        <div className={errorStyles}>{error}</div>
-      </Layout>
+      <div style={{ textAlign: 'center', padding: '2rem', color: 'red' }}>
+        Error: {error}
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div>
-        <h1 className={titleStyles}>投稿一覧</h1>
-        {posts.length === 0 ? (
-          <div className={emptyStyles}>
-            <p>投稿がありません。</p>
-            <p className="text-gray-500 text-sm mt-2">
-              新しい投稿を作成してみましょう！
-            </p>
-          </div>
-        ) : (
-          <div className={postsGridStyles}>
+    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h1>Latest Posts</h1>
+        <Link
+          to="/create-post"
+          style={{
+            backgroundColor: '#2563eb',
+            color: 'white',
+            padding: '0.75rem 1.5rem',
+            textDecoration: 'none',
+            borderRadius: '0.375rem',
+            fontWeight: '500',
+          }}
+        >
+          Create New Post
+        </Link>
+      </div>
+
+      {posts.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#f9fafb', borderRadius: '0.5rem' }}>
+          <h3>No posts yet</h3>
+          <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
+            Be the first to create a post!
+          </p>
+          <Link
+            to="/create-post"
+            style={{
+              backgroundColor: '#2563eb',
+              color: 'white',
+              padding: '0.75rem 1.5rem',
+              textDecoration: 'none',
+              borderRadius: '0.375rem',
+              fontWeight: '500',
+            }}
+          >
+            Create Post
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {posts.map((post) => (
-              <article
+              <div
                 key={post.id}
-                className={postCardStyles}
+                style={{
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '0.5rem',
+                  padding: '1.5rem',
+                  backgroundColor: 'white',
+                }}
               >
-                {post.thumbnail_url && (
-                  <img
-                    src={post.thumbnail_url}
-                    alt={post.title}
-                    className={postImageStyles}
-                  />
-                )}
-                <div className={postContentStyles}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
+                  <div>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+                      <Link
+                        to={`/posts/${post.id}`}
+                        style={{ color: '#1f2937', textDecoration: 'none' }}
+                      >
+                        {post.title}
+                      </Link>
+                    </h2>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      By {post.author.display_name} • {new Date(post.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  {post.thumbnail_url && (
+                    <img
+                      src={post.thumbnail_url}
+                      alt={post.title}
+                      style={{
+                        width: '80px',
+                        height: '80px',
+                        objectFit: 'cover',
+                        borderRadius: '0.375rem',
+                      }}
+                    />
+                  )}
+                </div>
+
+                <p style={{ color: '#4b5563', lineHeight: '1.6', marginBottom: '1rem' }}>
+                  {post.content.substring(0, 200)}
+                  {post.content.length > 200 && '...'}
+                </p>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Link
                     to={`/posts/${post.id}`}
-                    className={postTitleStyles}
+                    style={{
+                      color: '#2563eb',
+                      textDecoration: 'none',
+                      fontWeight: '500',
+                    }}
                   >
-                    {post.title}
+                    Read more →
                   </Link>
-                  <div className={postMetaStyles}>
-                    {post.created_at ? formatDate(post.created_at) : 'N/A'}
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    {post.replies?.length || 0} replies
                   </div>
-                  <p className={postExcerptStyles}>{post.content}</p>
                 </div>
-              </article>
+              </div>
             ))}
           </div>
-        )}
 
-        <div className={paginationStyles}>
-          <button
-            onClick={() => setPage(page - 1)}
-            disabled={page <= 1}
-            className={`${pageButtonStyles} ${page > 1 ? pageButtonActiveStyles : "bg-gray-300 text-gray-500"}`}
-          >
-            ← 前のページ
-          </button>
-          <span className={pageInfoStyles}>
-            ページ {page} / {Math.ceil(total / 20)}
-          </span>
-          <button
-            onClick={() => setPage(page + 1)}
-            disabled={page >= Math.ceil(total / 20)}
-            className={`${pageButtonStyles} ${page < Math.ceil(total / 20) ? pageButtonActiveStyles : "bg-gray-300 text-gray-500"}`}
-          >
-            次のページ →
-          </button>
-        </div>
-      </div>
-    </Layout>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: page === 1 ? '#f9fafb' : 'white',
+                  color: page === 1 ? '#9ca3af' : '#374151',
+                  borderRadius: '0.375rem',
+                  cursor: page === 1 ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Previous
+              </button>
+
+              <span style={{ color: '#6b7280' }}>
+                Page {page} of {totalPages}
+              </span>
+
+              <button
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: page === totalPages ? '#f9fafb' : 'white',
+                  color: page === totalPages ? '#9ca3af' : '#374151',
+                  borderRadius: '0.375rem',
+                  cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 };
-
-export default Home;

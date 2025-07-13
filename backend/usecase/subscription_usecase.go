@@ -1,61 +1,102 @@
 package usecase
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
-	"posting-app/domain"
+	"log/slog"
 	"time"
 
 	"github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/checkout/session"
-	"github.com/stripe/stripe-go/v76/webhook"
+	"github.com/stripe/stripe-go/v76/customer"
+	"github.com/stripe/stripe-go/v76/subscription"
+	"posting-app/domain"
+	"posting-app/repository"
 )
 
-type subscriptionUsecase struct {
-	subscriptionRepo domain.SubscriptionRepository
-	userRepo         domain.UserRepository
+type SubscriptionUsecase struct {
+	userRepo         *repository.UserRepository
+	subscriptionRepo *repository.SubscriptionRepository
+	stripeAPIKey     string
+	priceID          string
+	webhookSecret    string
+	baseURL          string
 }
 
-func NewSubscriptionUsecase(subscriptionRepo domain.SubscriptionRepository, userRepo domain.UserRepository) domain.SubscriptionUsecase {
-	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
-	return &subscriptionUsecase{
-		subscriptionRepo: subscriptionRepo,
+func NewSubscriptionUsecase(
+	userRepo *repository.UserRepository,
+	subscriptionRepo *repository.SubscriptionRepository,
+	stripeAPIKey, priceID, webhookSecret, baseURL string,
+) *SubscriptionUsecase {
+	stripe.Key = stripeAPIKey
+	return &SubscriptionUsecase{
 		userRepo:         userRepo,
+		subscriptionRepo: subscriptionRepo,
+		stripeAPIKey:     stripeAPIKey,
+		priceID:          priceID,
+		webhookSecret:    webhookSecret,
+		baseURL:          baseURL,
 	}
 }
 
-func (u *subscriptionUsecase) CreateCheckoutSession(userID int) (string, error) {
+func (u *SubscriptionUsecase) GetSubscriptionStatus(userID int) (*domain.Subscription, error) {
+	sub, err := u.subscriptionRepo.GetByUserID(userID)
+	if err != nil {
+		// User has no subscription
+		return &domain.Subscription{
+			UserID: userID,
+			Status: domain.UserSubscriptionStatusInactive,
+		}, nil
+	}
+
+	return sub, nil
+}
+
+func (u *SubscriptionUsecase) CreateCheckoutSession(userID int) (string, error) {
 	user, err := u.userRepo.GetByID(userID)
 	if err != nil {
-		return "", fmt.Errorf("user not found: %w", err)
+		return "", errors.New("user not found")
 	}
 
-	priceID := os.Getenv("STRIPE_PRICE_ID")
-	if priceID == "" {
-		return "", fmt.Errorf("stripe price ID not configured")
+	// Create or get Stripe customer
+	var customerID string
+	if user.StripeCustomerID != nil {
+		customerID = *user.StripeCustomerID
+	} else {
+		// Create new customer
+		params := &stripe.CustomerParams{
+			Email: stripe.String(user.Email),
+			Name:  stripe.String(user.DisplayName),
+		}
+		c, err := customer.New(params)
+		if err != nil {
+			return "", fmt.Errorf("failed to create Stripe customer: %w", err)
+		}
+		customerID = c.ID
+
+		// Update user with customer ID
+		user.StripeCustomerID = &customerID
+		err = u.userRepo.Update(user)
+		if err != nil {
+			slog.Error("Failed to update user with Stripe customer ID", "error", err)
+		}
 	}
 
+	// Create checkout session
 	params := &stripe.CheckoutSessionParams{
-		PaymentMethodTypes: stripe.StringSlice([]string{"card"}),
+		Customer: stripe.String(customerID),
+		PaymentMethodTypes: stripe.StringSlice([]string{
+			"card",
+		}),
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
 			{
-				Price:    stripe.String(priceID),
+				Price:    stripe.String(u.priceID),
 				Quantity: stripe.Int64(1),
 			},
 		},
 		Mode:       stripe.String(string(stripe.CheckoutSessionModeSubscription)),
-		SuccessURL: stripe.String(os.Getenv("FRONTEND_URL") + "/subscription/success"),
-		CancelURL:  stripe.String(os.Getenv("FRONTEND_URL") + "/subscription/cancel"),
-		Metadata: map[string]string{
-			"user_id": fmt.Sprintf("%d", userID),
-		},
-	}
-
-	if user.StripeCustomerID != nil {
-		params.Customer = user.StripeCustomerID
-	} else {
-		params.CustomerEmail = stripe.String(user.Email)
+		SuccessURL: stripe.String(u.baseURL + "/subscription?success=true"),
+		CancelURL:  stripe.String(u.baseURL + "/subscription?canceled=true"),
 	}
 
 	s, err := session.New(params)
@@ -63,173 +104,291 @@ func (u *subscriptionUsecase) CreateCheckoutSession(userID int) (string, error) 
 		return "", fmt.Errorf("failed to create checkout session: %w", err)
 	}
 
-	return s.ID, nil
+	slog.Info("Checkout session created", "user_id", userID, "session_id", s.ID)
+	return s.URL, nil
 }
 
-func (u *subscriptionUsecase) HandleWebhook(payload []byte, signature string) error {
-	endpointSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
-	if endpointSecret == "" {
-		return fmt.Errorf("stripe webhook secret not configured")
-	}
-
-	event, err := webhook.ConstructEvent(payload, signature, endpointSecret)
-	if err != nil {
-		return fmt.Errorf("failed to verify webhook signature: %w", err)
-	}
-
-	switch event.Type {
+func (u *SubscriptionUsecase) HandleWebhook(eventType string, data interface{}) error {
+	switch eventType {
 	case "checkout.session.completed":
-		var session stripe.CheckoutSession
-		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
-			return fmt.Errorf("failed to parse session: %w", err)
-		}
-		
-		return u.handleCheckoutSessionCompleted(&session)
-
+		return u.handleCheckoutSessionCompleted(data)
 	case "customer.subscription.created":
-		var subscription stripe.Subscription
-		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
-			return fmt.Errorf("failed to parse subscription: %w", err)
-		}
-		
-		return u.handleSubscriptionCreated(&subscription)
-
+		return u.handleSubscriptionCreated(data)
 	case "customer.subscription.updated":
-		var subscription stripe.Subscription
-		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
-			return fmt.Errorf("failed to parse subscription: %w", err)
-		}
-		
-		return u.handleSubscriptionUpdated(&subscription)
-
+		return u.handleSubscriptionUpdated(data)
 	case "customer.subscription.deleted":
-		var subscription stripe.Subscription
-		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
-			return fmt.Errorf("failed to parse subscription: %w", err)
-		}
-		
-		return u.handleSubscriptionDeleted(&subscription)
+		return u.handleSubscriptionDeleted(data)
+	case "invoice.payment_failed":
+		return u.handlePaymentFailed(data)
+	default:
+		slog.Info("Unhandled webhook event", "type", eventType)
+		return nil
+	}
+}
+
+func (u *SubscriptionUsecase) handleCheckoutSessionCompleted(data interface{}) error {
+	sessionData, ok := data.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid session data")
 	}
 
+	customerID, ok := sessionData["customer"].(string)
+	if !ok {
+		return errors.New("missing customer ID in session")
+	}
+
+	// Find user by Stripe customer ID
+	user, err := u.findUserByStripeCustomerID(customerID)
+	if err != nil {
+		return fmt.Errorf("failed to find user by customer ID: %w", err)
+	}
+
+	slog.Info("Checkout session completed", "user_id", user.ID, "customer_id", customerID)
 	return nil
 }
 
-func (u *subscriptionUsecase) handleCheckoutSessionCompleted(session *stripe.CheckoutSession) error {
-	userID := session.Metadata["user_id"]
-	if userID == "" {
-		return fmt.Errorf("user_id not found in session metadata")
+func (u *SubscriptionUsecase) handleSubscriptionCreated(data interface{}) error {
+	subData, ok := data.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid subscription data")
 	}
 
-	user, err := u.userRepo.GetByID(parseInt(userID))
-	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
-	}
-
-	if user.StripeCustomerID == nil {
-		customerID := session.Customer.ID
-		user.StripeCustomerID = &customerID
-		if err := u.userRepo.Update(user); err != nil {
-			return fmt.Errorf("failed to update user with customer ID: %w", err)
-		}
-	}
-
-	return nil
+	return u.processSubscriptionEvent(subData)
 }
 
-func (u *subscriptionUsecase) handleSubscriptionCreated(stripeSubscription *stripe.Subscription) error {
-	userID, err := u.getUserIDFromCustomer(stripeSubscription.Customer.ID)
+func (u *SubscriptionUsecase) handleSubscriptionUpdated(data interface{}) error {
+	subData, ok := data.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid subscription data")
+	}
+
+	return u.processSubscriptionEvent(subData)
+}
+
+func (u *SubscriptionUsecase) handleSubscriptionDeleted(data interface{}) error {
+	subData, ok := data.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid subscription data")
+	}
+
+	return u.processSubscriptionEvent(subData)
+}
+
+func (u *SubscriptionUsecase) processSubscriptionEvent(subData map[string]interface{}) error {
+	stripeSubID, ok := subData["id"].(string)
+	if !ok {
+		return errors.New("missing subscription ID")
+	}
+
+	customerID, ok := subData["customer"].(string)
+	if !ok {
+		return errors.New("missing customer ID")
+	}
+
+	status, ok := subData["status"].(string)
+	if !ok {
+		return errors.New("missing subscription status")
+	}
+
+	currentPeriodStart, ok := subData["current_period_start"].(float64)
+	if !ok {
+		return errors.New("missing current_period_start")
+	}
+
+	currentPeriodEnd, ok := subData["current_period_end"].(float64)
+	if !ok {
+		return errors.New("missing current_period_end")
+	}
+
+	// Find user by Stripe customer ID
+	user, err := u.findUserByStripeCustomerID(customerID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to find user by customer ID: %w", err)
 	}
 
-	subscription := &domain.Subscription{
-		UserID:               userID,
-		StripeSubscriptionID: stripeSubscription.ID,
-		Status:               string(stripeSubscription.Status),
-		CurrentPeriodStart:   time.Unix(stripeSubscription.CurrentPeriodStart, 0),
-		CurrentPeriodEnd:     time.Unix(stripeSubscription.CurrentPeriodEnd, 0),
+	// Convert Stripe status to our domain status
+	var domainStatus domain.UserSubscriptionStatus
+	switch status {
+	case "active":
+		domainStatus = domain.UserSubscriptionStatusActive
+	case "past_due":
+		domainStatus = domain.UserSubscriptionStatusPastDue
+	case "canceled", "incomplete_expired", "unpaid":
+		domainStatus = domain.UserSubscriptionStatusCanceled
+	default:
+		domainStatus = domain.UserSubscriptionStatusInactive
 	}
 
-	if err := u.subscriptionRepo.Create(subscription); err != nil {
-		return fmt.Errorf("failed to create subscription: %w", err)
-	}
-
-	user, err := u.userRepo.GetByID(userID)
+	// Update user subscription status
+	user.SubscriptionStatus = domainStatus
+	err = u.userRepo.Update(user)
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
-	}
-
-	user.SubscriptionStatus = "active"
-	if err := u.userRepo.Update(user); err != nil {
 		return fmt.Errorf("failed to update user subscription status: %w", err)
 	}
 
-	return nil
-}
-
-func (u *subscriptionUsecase) handleSubscriptionUpdated(stripeSubscription *stripe.Subscription) error {
-	subscription, err := u.subscriptionRepo.GetByStripeID(stripeSubscription.ID)
+	// Create or update subscription record
+	existingSub, err := u.subscriptionRepo.GetByStripeSubscriptionID(stripeSubID)
 	if err != nil {
-		return fmt.Errorf("subscription not found: %w", err)
-	}
-
-	subscription.Status = string(stripeSubscription.Status)
-	subscription.CurrentPeriodStart = time.Unix(stripeSubscription.CurrentPeriodStart, 0)
-	subscription.CurrentPeriodEnd = time.Unix(stripeSubscription.CurrentPeriodEnd, 0)
-
-	if err := u.subscriptionRepo.Update(subscription); err != nil {
-		return fmt.Errorf("failed to update subscription: %w", err)
-	}
-
-	user, err := u.userRepo.GetByID(subscription.UserID)
-	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
-	}
-
-	if stripeSubscription.Status == stripe.SubscriptionStatusActive {
-		user.SubscriptionStatus = "active"
+		// Create new subscription
+		sub := &domain.Subscription{
+			UserID:               user.ID,
+			StripeSubscriptionID: stripeSubID,
+			Status:               domainStatus,
+			CurrentPeriodStart:   time.Unix(int64(currentPeriodStart), 0),
+			CurrentPeriodEnd:     time.Unix(int64(currentPeriodEnd), 0),
+		}
+		err = u.subscriptionRepo.Create(sub)
+		if err != nil {
+			return fmt.Errorf("failed to create subscription: %w", err)
+		}
 	} else {
-		user.SubscriptionStatus = "inactive"
+		// Update existing subscription
+		existingSub.Status = domainStatus
+		existingSub.CurrentPeriodStart = time.Unix(int64(currentPeriodStart), 0)
+		existingSub.CurrentPeriodEnd = time.Unix(int64(currentPeriodEnd), 0)
+		err = u.subscriptionRepo.Update(existingSub)
+		if err != nil {
+			return fmt.Errorf("failed to update subscription: %w", err)
+		}
 	}
 
-	if err := u.userRepo.Update(user); err != nil {
-		return fmt.Errorf("failed to update user subscription status: %w", err)
-	}
-
+	slog.Info("Subscription processed", "user_id", user.ID, "status", status, "stripe_sub_id", stripeSubID)
 	return nil
 }
 
-func (u *subscriptionUsecase) handleSubscriptionDeleted(stripeSubscription *stripe.Subscription) error {
-	subscription, err := u.subscriptionRepo.GetByStripeID(stripeSubscription.ID)
+func (u *SubscriptionUsecase) handlePaymentFailed(data interface{}) error {
+	invoiceData, ok := data.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid invoice data")
+	}
+
+	customerID, ok := invoiceData["customer"].(string)
+	if !ok {
+		return errors.New("missing customer ID in invoice")
+	}
+
+	// Find user by Stripe customer ID
+	user, err := u.findUserByStripeCustomerID(customerID)
 	if err != nil {
-		return fmt.Errorf("subscription not found: %w", err)
+		return fmt.Errorf("failed to find user by customer ID: %w", err)
 	}
 
-	subscription.Status = "canceled"
-	if err := u.subscriptionRepo.Update(subscription); err != nil {
-		return fmt.Errorf("failed to update subscription: %w", err)
-	}
-
-	user, err := u.userRepo.GetByID(subscription.UserID)
+	// Update user status to past_due
+	user.SubscriptionStatus = domain.UserSubscriptionStatusPastDue
+	err = u.userRepo.Update(user)
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
-	}
-
-	user.SubscriptionStatus = "canceled"
-	if err := u.userRepo.Update(user); err != nil {
 		return fmt.Errorf("failed to update user subscription status: %w", err)
 	}
 
+	slog.Info("Payment failed, user status updated to past_due", "user_id", user.ID, "customer_id", customerID)
 	return nil
 }
 
-func (u *subscriptionUsecase) getUserIDFromCustomer(customerID string) (int, error) {
-	// This would typically involve querying the users table by stripe_customer_id
-	// For now, return an error as this requires additional implementation
-	return 0, fmt.Errorf("not implemented: getUserIDFromCustomer")
+func (u *SubscriptionUsecase) findUserByStripeCustomerID(customerID string) (*domain.User, error) {
+	// This is a simplified implementation. In a real app, you might want to add an index on stripe_customer_id
+	// or implement a more efficient query
+	users, _, err := u.userRepo.GetAll(1, 1000) // Get all users (assuming we don't have too many)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, user := range users {
+		if user.StripeCustomerID != nil && *user.StripeCustomerID == customerID {
+			return user, nil
+		}
+	}
+
+	return nil, errors.New("user not found with given Stripe customer ID")
 }
 
-func parseInt(s string) int {
-	// Simple implementation for demo - in production, use strconv.Atoi with error handling
-	return 0
+// Batch function to sync subscription statuses
+func (u *SubscriptionUsecase) SyncSubscriptionStatuses() error {
+	// Get all users with Stripe customer IDs
+	users, _, err := u.userRepo.GetAll(1, 1000)
+	if err != nil {
+		return fmt.Errorf("failed to get users: %w", err)
+	}
+
+	for _, user := range users {
+		if user.StripeCustomerID == nil {
+			continue
+		}
+
+		// Get Stripe subscription
+		iter := subscription.List(&stripe.SubscriptionListParams{
+			Customer: stripe.String(*user.StripeCustomerID),
+		})
+
+		var latestSub *stripe.Subscription
+		for iter.Next() {
+			sub := iter.Subscription()
+			if latestSub == nil || sub.Created > latestSub.Created {
+				latestSub = sub
+			}
+		}
+
+		if latestSub == nil {
+			// No subscription found, mark as inactive
+			if user.SubscriptionStatus != domain.UserSubscriptionStatusInactive {
+				user.SubscriptionStatus = domain.UserSubscriptionStatusInactive
+				err = u.userRepo.Update(user)
+				if err != nil {
+					slog.Error("Failed to update user subscription status", "user_id", user.ID, "error", err)
+				}
+			}
+			continue
+		}
+
+		// Convert Stripe status to our domain status
+		var domainStatus domain.UserSubscriptionStatus
+		switch latestSub.Status {
+		case stripe.SubscriptionStatusActive:
+			domainStatus = domain.UserSubscriptionStatusActive
+		case stripe.SubscriptionStatusPastDue:
+			domainStatus = domain.UserSubscriptionStatusPastDue
+		case stripe.SubscriptionStatusCanceled, stripe.SubscriptionStatusIncompleteExpired, stripe.SubscriptionStatusUnpaid:
+			domainStatus = domain.UserSubscriptionStatusCanceled
+		default:
+			domainStatus = domain.UserSubscriptionStatusInactive
+		}
+
+		// Update user if status changed
+		if user.SubscriptionStatus != domainStatus {
+			user.SubscriptionStatus = domainStatus
+			err = u.userRepo.Update(user)
+			if err != nil {
+				slog.Error("Failed to update user subscription status", "user_id", user.ID, "error", err)
+				continue
+			}
+		}
+
+		// Update or create subscription record
+		existingSub, err := u.subscriptionRepo.GetByUserID(user.ID)
+		if err != nil {
+			// Create new subscription
+			sub := &domain.Subscription{
+				UserID:               user.ID,
+				StripeSubscriptionID: latestSub.ID,
+				Status:               domainStatus,
+				CurrentPeriodStart:   time.Unix(latestSub.CurrentPeriodStart, 0),
+				CurrentPeriodEnd:     time.Unix(latestSub.CurrentPeriodEnd, 0),
+			}
+			err = u.subscriptionRepo.Create(sub)
+			if err != nil {
+				slog.Error("Failed to create subscription", "user_id", user.ID, "error", err)
+			}
+		} else {
+			// Update existing subscription
+			existingSub.Status = domainStatus
+			existingSub.CurrentPeriodStart = time.Unix(latestSub.CurrentPeriodStart, 0)
+			existingSub.CurrentPeriodEnd = time.Unix(latestSub.CurrentPeriodEnd, 0)
+			err = u.subscriptionRepo.Update(existingSub)
+			if err != nil {
+				slog.Error("Failed to update subscription", "user_id", user.ID, "error", err)
+			}
+		}
+	}
+
+	slog.Info("Subscription status sync completed")
+	return nil
 }

@@ -1,164 +1,236 @@
 package usecase
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
+
 	"posting-app/domain"
+	"posting-app/repository"
 )
 
-type postUsecase struct {
-	postRepo  domain.PostRepository
-	replyRepo domain.ReplyRepository
+type PostUsecase struct {
+	postRepo *repository.PostRepository
+	userRepo *repository.UserRepository
 }
 
-func NewPostUsecase(postRepo domain.PostRepository, replyRepo domain.ReplyRepository) domain.PostUsecase {
-	return &postUsecase{
-		postRepo:  postRepo,
-		replyRepo: replyRepo,
-	}
-}
-
-func (u *postUsecase) CreatePost(userID int, title, content string, thumbnailURL *string) (*domain.Post, error) {
-	post := &domain.Post{
-		Title:        title,
-		Content:      content,
-		ThumbnailURL: thumbnailURL,
-		UserID:       userID,
-		Status:       "pending",
-	}
-
-	if err := u.postRepo.Create(post); err != nil {
-		return nil, fmt.Errorf("failed to create post: %w", err)
-	}
-
-	return post, nil
-}
-
-func (u *postUsecase) GetPost(id int) (*domain.Post, error) {
-	post, err := u.postRepo.GetByID(id)
-	if err != nil {
-		return nil, fmt.Errorf("post not found: %w", err)
-	}
-
-	if post.Status != "approved" {
-		return nil, fmt.Errorf("post not available")
-	}
-
-	return post, nil
-}
-
-func (u *postUsecase) ListPosts(status string, page, limit int) ([]*domain.Post, int, error) {
-	if status == "" {
-		status = "approved"
-	}
-
-	posts, total, err := u.postRepo.List(status, page, limit)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to list posts: %w", err)
-	}
-
-	return posts, total, nil
-}
-
-func (u *postUsecase) GetUserPosts(userID int) ([]*domain.Post, error) {
-	posts, err := u.postRepo.GetByUserID(userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user posts: %w", err)
-	}
-
-	return posts, nil
-}
-
-func (u *postUsecase) CreateReply(postID, userID int, content string, isAnonymous bool) (*domain.Reply, error) {
-	post, err := u.postRepo.GetByID(postID)
-	if err != nil {
-		return nil, fmt.Errorf("post not found: %w", err)
-	}
-
-	if post.Status != "approved" {
-		return nil, fmt.Errorf("cannot reply to unapproved post")
-	}
-
-	reply := &domain.Reply{
-		PostID:      postID,
-		Content:     content,
-		UserID:      userID,
-		IsAnonymous: isAnonymous,
-	}
-
-	if err := u.replyRepo.Create(reply); err != nil {
-		return nil, fmt.Errorf("failed to create reply: %w", err)
-	}
-
-	return reply, nil
-}
-
-func (u *postUsecase) GetReplies(postID int) ([]*domain.Reply, error) {
-	replies, err := u.replyRepo.GetByPostID(postID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get replies: %w", err)
-	}
-
-	return replies, nil
-}
-
-type adminUsecase struct {
-	postRepo domain.PostRepository
-	userRepo domain.UserRepository
-}
-
-func NewAdminUsecase(postRepo domain.PostRepository, userRepo domain.UserRepository) domain.AdminUsecase {
-	return &adminUsecase{
+func NewPostUsecase(postRepo *repository.PostRepository, userRepo *repository.UserRepository) *PostUsecase {
+	return &PostUsecase{
 		postRepo: postRepo,
 		userRepo: userRepo,
 	}
 }
 
-func (u *adminUsecase) ListAllPosts(status string) ([]*domain.Post, error) {
-	posts, _, err := u.postRepo.List(status, 1, 1000)
+func (u *PostUsecase) CreatePost(userID int, title, content string, thumbnailURL *string) (*domain.Post, error) {
+	// Check if user has active subscription
+	user, err := u.userRepo.GetByID(userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list posts: %w", err)
+		return nil, errors.New("user not found")
 	}
 
-	return posts, nil
-}
-
-func (u *adminUsecase) ApprovePost(id int) error {
-	if err := u.postRepo.Approve(id); err != nil {
-		return fmt.Errorf("failed to approve post: %w", err)
+	if user.SubscriptionStatus != domain.UserSubscriptionStatusActive {
+		return nil, errors.New("active subscription required to create posts")
 	}
 
-	return nil
-}
-
-func (u *adminUsecase) RejectPost(id int) error {
-	if err := u.postRepo.Reject(id); err != nil {
-		return fmt.Errorf("failed to reject post: %w", err)
+	post := &domain.Post{
+		Title:        title,
+		Content:      content,
+		ThumbnailURL: thumbnailURL,
+		AuthorID:     userID,
+		Status:       domain.PostStatusPending, // Requires admin approval
 	}
 
-	return nil
+	err = u.postRepo.Create(post)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create post: %w", err)
+	}
+
+	// Get the post with author info
+	createdPost, err := u.postRepo.GetByID(post.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get created post: %w", err)
+	}
+
+	slog.Info("Post created successfully", "post_id", post.ID, "user_id", userID)
+	return createdPost, nil
 }
 
-func (u *adminUsecase) DeletePost(id int) error {
-	if err := u.postRepo.Delete(id); err != nil {
+func (u *PostUsecase) UpdatePost(userID, postID int, title, content string, thumbnailURL *string) (*domain.Post, error) {
+	post, err := u.postRepo.GetByID(postID)
+	if err != nil {
+		return nil, errors.New("post not found")
+	}
+
+	if post.AuthorID != userID {
+		return nil, errors.New("you can only edit your own posts")
+	}
+
+	// Can only edit if post is pending
+	if post.Status != domain.PostStatusPending {
+		return nil, errors.New("can only edit posts that are pending approval")
+	}
+
+	post.Title = title
+	post.Content = content
+	post.ThumbnailURL = thumbnailURL
+
+	err = u.postRepo.Update(post)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update post: %w", err)
+	}
+
+	// Get updated post
+	updatedPost, err := u.postRepo.GetByID(postID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get updated post: %w", err)
+	}
+
+	slog.Info("Post updated successfully", "post_id", postID, "user_id", userID)
+	return updatedPost, nil
+}
+
+func (u *PostUsecase) DeletePost(userID, postID int) error {
+	post, err := u.postRepo.GetByID(postID)
+	if err != nil {
+		return errors.New("post not found")
+	}
+
+	if post.AuthorID != userID {
+		return errors.New("you can only delete your own posts")
+	}
+
+	err = u.postRepo.Delete(postID)
+	if err != nil {
 		return fmt.Errorf("failed to delete post: %w", err)
 	}
 
+	slog.Info("Post deleted successfully", "post_id", postID, "user_id", userID)
 	return nil
 }
 
-func (u *adminUsecase) ListUsers() ([]*domain.User, error) {
-	users, err := u.userRepo.List()
+func (u *PostUsecase) GetPost(postID int) (*domain.Post, error) {
+	post, err := u.postRepo.GetByID(postID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list users: %w", err)
+		return nil, errors.New("post not found")
 	}
 
-	return users, nil
+	// Only return approved posts or posts to their authors
+	if post.Status != domain.PostStatusApproved {
+		return nil, errors.New("post not available")
+	}
+
+	return post, nil
 }
 
-func (u *adminUsecase) DeactivateUser(id int) error {
-	if err := u.userRepo.Deactivate(id); err != nil {
-		return fmt.Errorf("failed to deactivate user: %w", err)
+func (u *PostUsecase) GetApprovedPosts(page, limit int) ([]*domain.Post, int, error) {
+	posts, total, err := u.postRepo.GetApproved(page, limit)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get posts: %w", err)
 	}
 
+	return posts, total, nil
+}
+
+func (u *PostUsecase) GetUserPosts(userID, page, limit int) ([]*domain.Post, int, error) {
+	posts, total, err := u.postRepo.GetByUserID(userID, page, limit)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get user posts: %w", err)
+	}
+
+	return posts, total, nil
+}
+
+func (u *PostUsecase) CreateReply(userID, postID int, content string, isAnonymous bool) (*domain.Reply, error) {
+	// Check if user has active subscription
+	user, err := u.userRepo.GetByID(userID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	if user.SubscriptionStatus != domain.UserSubscriptionStatusActive {
+		return nil, errors.New("active subscription required to create replies")
+	}
+
+	// Check if post exists and is approved
+	post, err := u.postRepo.GetByID(postID)
+	if err != nil {
+		return nil, errors.New("post not found")
+	}
+
+	if post.Status != domain.PostStatusApproved {
+		return nil, errors.New("can only reply to approved posts")
+	}
+
+	var authorID *int
+	if !isAnonymous {
+		authorID = &userID
+	}
+
+	reply := &domain.Reply{
+		Content:     content,
+		PostID:      postID,
+		AuthorID:    authorID,
+		IsAnonymous: isAnonymous,
+	}
+
+	err = u.postRepo.CreateReply(reply)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create reply: %w", err)
+	}
+
+	// Set author info if not anonymous
+	if !isAnonymous {
+		reply.Author = user
+	}
+
+	slog.Info("Reply created successfully", "reply_id", reply.ID, "post_id", postID, "user_id", userID, "anonymous", isAnonymous)
+	return reply, nil
+}
+
+// Admin functions
+func (u *PostUsecase) GetPostsForAdmin(page, limit int, status *domain.PostStatus) ([]*domain.Post, int, error) {
+	posts, total, err := u.postRepo.GetForAdmin(page, limit, status)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get posts for admin: %w", err)
+	}
+
+	return posts, total, nil
+}
+
+func (u *PostUsecase) ApprovePost(postID int) error {
+	post, err := u.postRepo.GetByID(postID)
+	if err != nil {
+		return errors.New("post not found")
+	}
+
+	if post.Status == domain.PostStatusApproved {
+		return errors.New("post is already approved")
+	}
+
+	err = u.postRepo.UpdateStatus(postID, domain.PostStatusApproved)
+	if err != nil {
+		return fmt.Errorf("failed to approve post: %w", err)
+	}
+
+	slog.Info("Post approved successfully", "post_id", postID)
+	return nil
+}
+
+func (u *PostUsecase) RejectPost(postID int) error {
+	post, err := u.postRepo.GetByID(postID)
+	if err != nil {
+		return errors.New("post not found")
+	}
+
+	if post.Status == domain.PostStatusRejected {
+		return errors.New("post is already rejected")
+	}
+
+	err = u.postRepo.UpdateStatus(postID, domain.PostStatusRejected)
+	if err != nil {
+		return fmt.Errorf("failed to reject post: %w", err)
+	}
+
+	slog.Info("Post rejected successfully", "post_id", postID)
 	return nil
 }

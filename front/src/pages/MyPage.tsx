@@ -1,184 +1,569 @@
-import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import Layout from "../components/Layout";
-import { postsAPI } from "../utils/api";
-import type { Post } from "../types";
-// import { css } from '../../styled-system/css';
-// import { flex } from '../../styled-system/patterns';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { userApi, authApi } from '../utils/api';
+import { Post, PaginatedResponse } from '../types';
 
-const MyPage: React.FC = () => {
+export const MyPage: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [bio, setBio] = useState('');
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState('');
+  const [updateSuccess, setUpdateSuccess] = useState('');
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+
+  const limit = 10;
+  const { user, updateUser } = useAuth();
 
   useEffect(() => {
-    loadUserPosts();
-  }, []);
+    fetchPosts();
+    if (user) {
+      setDisplayName(user.display_name);
+      setBio(user.bio || '');
+    }
+  }, [page, user]);
 
-  const loadUserPosts = async () => {
+  const fetchPosts = async () => {
     try {
-      const userPosts = await postsAPI.getUserPosts();
-      setPosts(userPosts);
-    } catch (err) {
-      setError("投稿の読み込みに失敗しました");
+      setLoading(true);
+      const response: PaginatedResponse<Post> = await userApi.getUserPosts(page, limit);
+      setPosts(response.data);
+      setTotal(response.total);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch posts');
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "承認待ち";
-      case "approved":
-        return "承認済み";
-      case "rejected":
-        return "却下";
-      default:
-        return status;
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!displayName.trim()) {
+      setUpdateError('Display name is required');
+      return;
+    }
+
+    if (displayName.length > 100) {
+      setUpdateError('Display name must be less than 100 characters');
+      return;
+    }
+
+    if (bio.length > 500) {
+      setUpdateError('Bio must be less than 500 characters');
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      setUpdateError('');
+
+      const updatedUser = await userApi.updateProfile(displayName.trim(), bio.trim() || undefined);
+      updateUser(updatedUser);
+      setUpdateSuccess('Profile updated successfully');
+      setShowEditProfile(false);
+      
+      setTimeout(() => setUpdateSuccess(''), 3000);
+    } catch (err: any) {
+      setUpdateError(err.response?.data?.message || 'Failed to update profile');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All fields are required');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters long');
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+      setPasswordError('');
+
+      await authApi.changePassword(currentPassword, newPassword);
+      setPasswordSuccess('Password changed successfully');
+      setShowChangePassword(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      
+      setTimeout(() => setPasswordSuccess(''), 3000);
+    } catch (err: any) {
+      setPasswordError(err.response?.data?.message || 'Failed to change password');
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending":
-        return "warning.500";
-      case "approved":
-        return "success.500";
-      case "rejected":
-        return "danger.500";
-      default:
-        return "gray.500";
+      case 'approved': return '#059669';
+      case 'pending': return '#d97706';
+      case 'rejected': return '#dc2626';
+      default: return '#6b7280';
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("ja-JP", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const getStatusBadge = (status: string) => {
+    return (
+      <span style={{
+        backgroundColor: getStatusColor(status),
+        color: 'white',
+        padding: '0.25rem 0.5rem',
+        borderRadius: '0.25rem',
+        fontSize: '0.75rem',
+        fontWeight: '500',
+        textTransform: 'uppercase',
+      }}>
+        {status}
+      </span>
+    );
   };
 
-  // Temporary basic styles
-  const loadingStyles = "text-center py-12 text-gray-600 text-lg";
-  const errorStyles =
-    "bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-lg text-center";
-  const titleStyles = "text-3xl font-bold text-gray-900 mb-8";
-  const headerStyles = "flex justify-between items-center mb-8";
-  const createButtonStyles =
-    "bg-blue-600 text-white px-6 py-3 rounded-lg no-underline text-sm font-semibold";
-  const sectionTitleStyles = "text-2xl font-semibold text-gray-800 mb-6";
-  const emptyStateStyles =
-    "text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300";
-  const postCardStyles =
-    "bg-white border border-gray-200 rounded-xl p-6 mb-4 shadow-sm";
-  const postHeaderStyles = "flex justify-between items-start mb-4";
-  const postTitleStyles = "text-xl font-semibold text-gray-900 no-underline";
-  const statusBadgeStyles =
-    "px-3 py-1 rounded-full text-white text-xs font-bold whitespace-nowrap";
-  const postMetaStyles = "text-gray-500 text-sm mb-3";
-  const postContentStyles =
-    "text-gray-700 leading-relaxed overflow-hidden mb-3";
-  const thumbnailStyles = "max-w-40 max-h-24 object-cover rounded-md mt-3";
-
-  if (loading) {
-    return (
-      <Layout>
-        <div className={loadingStyles}>読み込み中...</div>
-      </Layout>
-    );
-  }
-
-  if (error) {
-    return (
-      <Layout>
-        <div className={errorStyles}>{error}</div>
-      </Layout>
-    );
-  }
+  const totalPages = Math.ceil(total / limit);
 
   return (
-    <Layout>
-      <div>
-        <div className={headerStyles}>
-          <h1 className={titleStyles}>マイページ</h1>
-          <Link
-            to="/create-post"
-            className={createButtonStyles}
-          >
-            新規投稿
-          </Link>
+    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: '700' }}>My Page</h1>
+        <Link
+          to="/create-post"
+          style={{
+            backgroundColor: '#2563eb',
+            color: 'white',
+            padding: '0.75rem 1.5rem',
+            textDecoration: 'none',
+            borderRadius: '0.375rem',
+            fontWeight: '500',
+          }}
+        >
+          Create New Post
+        </Link>
+      </div>
+
+      {/* Success Messages */}
+      {updateSuccess && (
+        <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', padding: '0.75rem', borderRadius: '0.375rem', marginBottom: '1rem' }}>
+          {updateSuccess}
+        </div>
+      )}
+
+      {passwordSuccess && (
+        <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', padding: '0.75rem', borderRadius: '0.375rem', marginBottom: '1rem' }}>
+          {passwordSuccess}
+        </div>
+      )}
+
+      {/* Profile Section */}
+      <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1.5rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
+          <div>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+              Profile Information
+            </h2>
+            <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+              <p><strong>Email:</strong> {user?.email}</p>
+              <p><strong>Display Name:</strong> {user?.display_name}</p>
+              <p><strong>Subscription:</strong> {user?.subscription_status}</p>
+              {user?.bio && <p><strong>Bio:</strong> {user.bio}</p>}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setShowEditProfile(!showEditProfile)}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+              }}
+            >
+              Edit Profile
+            </button>
+            <button
+              onClick={() => setShowChangePassword(!showChangePassword)}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#059669',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+              }}
+            >
+              Change Password
+            </button>
+          </div>
         </div>
 
-        <h2 className={sectionTitleStyles}>あなたの投稿一覧</h2>
-        {posts.length === 0 ? (
-          <div className={emptyStateStyles}>
-            <p className="mb-4 text-gray-600">まだ投稿がありません。</p>
+        {/* Edit Profile Form */}
+        {showEditProfile && (
+          <form onSubmit={handleProfileUpdate} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f9fafb', borderRadius: '0.375rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '500', marginBottom: '1rem' }}>
+              Edit Profile
+            </h3>
+            
+            {updateError && (
+              <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                {updateError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                Display Name
+              </label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                maxLength={100}
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                {displayName.length}/100 characters
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                Bio (optional)
+              </label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                maxLength={500}
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                {bio.length}/500 characters
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="submit"
+                disabled={updating}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: updating ? '#9ca3af' : '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: updating ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {updating ? 'Updating...' : 'Update Profile'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEditProfile(false)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Change Password Form */}
+        {showChangePassword && (
+          <form onSubmit={handlePasswordChange} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f9fafb', borderRadius: '0.375rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '500', marginBottom: '1rem' }}>
+              Change Password
+            </h3>
+            
+            {passwordError && (
+              <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                {passwordError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                Current Password
+              </label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                New Password
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={8}
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+                Confirm New Password
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="submit"
+                disabled={passwordLoading}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: passwordLoading ? '#9ca3af' : '#059669',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: passwordLoading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {passwordLoading ? 'Changing...' : 'Change Password'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowChangePassword(false)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* Posts Section */}
+      <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1.5rem' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1.5rem' }}>
+          My Posts ({total})
+        </h2>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '2rem' }}>
+            <div>Loading posts...</div>
+          </div>
+        ) : error ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#dc2626' }}>
+            Error: {error}
+          </div>
+        ) : posts.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem' }}>
+            <h3>No posts yet</h3>
+            <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
+              You haven't created any posts yet.
+            </p>
             <Link
               to="/create-post"
-              className="text-blue-600 no-underline"
+              style={{
+                backgroundColor: '#2563eb',
+                color: 'white',
+                padding: '0.75rem 1.5rem',
+                textDecoration: 'none',
+                borderRadius: '0.375rem',
+                fontWeight: '500',
+              }}
             >
-              最初の投稿を作成する
+              Create Your First Post
             </Link>
           </div>
         ) : (
-          <div>
-            {posts.map((post) => (
-              <div
-                key={post.id}
-                className={postCardStyles}
-              >
-                <div className={postHeaderStyles}>
-                  <h3 className="m-0 flex-1 pr-4">
-                    {post.status === "approved" ? (
-                      <Link
-                        to={`/posts/${post.id}`}
-                        className={postTitleStyles}
-                      >
-                        {post.title}
-                      </Link>
-                    ) : (
-                      <span className="text-gray-700">{post.title}</span>
-                    )}
-                  </h3>
-                  <span
-                    className={statusBadgeStyles}
-                    style={{
-                      backgroundColor:
-                        post.status && getStatusColor(post.status) === "warning.500"
-                          ? "#f59e0b"
-                          : post.status && getStatusColor(post.status) === "success.500"
-                            ? "#10b981"
-                            : "#ef4444",
-                    }}
-                  >
-                    {post.status ? getStatusText(post.status) : 'Unknown'}
-                  </span>
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {posts.map((post) => (
+                <div
+                  key={post.id}
+                  style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '0.375rem',
+                    padding: '1rem',
+                    backgroundColor: '#fafafa',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
+                    <div>
+                      <h3 style={{ fontSize: '1.125rem', fontWeight: '600', marginBottom: '0.25rem' }}>
+                        <Link
+                          to={`/posts/${post.id}`}
+                          style={{ color: '#1f2937', textDecoration: 'none' }}
+                        >
+                          {post.title}
+                        </Link>
+                      </h3>
+                      <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                        {new Date(post.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {getStatusBadge(post.status)}
+                      {post.status === 'pending' && (
+                        <Link
+                          to={`/posts/${post.id}/edit`}
+                          style={{
+                            color: '#2563eb',
+                            textDecoration: 'none',
+                            fontSize: '0.875rem',
+                            fontWeight: '500',
+                          }}
+                        >
+                          Edit
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+
+                  <p style={{ color: '#4b5563', lineHeight: '1.5', marginBottom: '0.5rem' }}>
+                    {post.content.substring(0, 150)}
+                    {post.content.length > 150 && '...'}
+                  </p>
+
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    {post.replies?.length || 0} replies
+                  </div>
                 </div>
-                <p className={postMetaStyles}>
-                  投稿日: {post.created_at ? formatDate(post.created_at) : 'N/A'}
-                  {post.updated_at && post.created_at && post.updated_at !== post.created_at && (
-                    <span> (更新日: {formatDate(post.updated_at)})</span>
-                  )}
-                </p>
-                <p className={postContentStyles}>{post.content}</p>
-                {post.thumbnail_url && (
-                  <img
-                    src={post.thumbnail_url}
-                    alt="サムネイル"
-                    className={thumbnailStyles}
-                  />
-                )}
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
+                <button
+                  onClick={() => setPage(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: '1px solid #d1d5db',
+                    backgroundColor: page === 1 ? '#f9fafb' : 'white',
+                    color: page === 1 ? '#9ca3af' : '#374151',
+                    borderRadius: '0.375rem',
+                    cursor: page === 1 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Previous
+                </button>
+
+                <span style={{ color: '#6b7280' }}>
+                  Page {page} of {totalPages}
+                </span>
+
+                <button
+                  onClick={() => setPage(Math.min(totalPages, page + 1))}
+                  disabled={page === totalPages}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    border: '1px solid #d1d5db',
+                    backgroundColor: page === totalPages ? '#f9fafb' : 'white',
+                    color: page === totalPages ? '#9ca3af' : '#374151',
+                    borderRadius: '0.375rem',
+                    cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Next
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
-    </Layout>
+    </div>
   );
 };
-
-export default MyPage;

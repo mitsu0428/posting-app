@@ -1,33 +1,48 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
+
+	"github.com/kelseyhightower/envconfig"
 	"posting-app/di"
-	"posting-app/infrastructure"
+	"posting-app/handler"
 )
 
 func main() {
-	container := di.BuildContainer()
+	// Setup logging
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
 
-	err := container.Invoke(func(params di.DIParams) error {
-		if err := infrastructure.RunMigrations(params.Database); err != nil {
-			return err
-		}
-
-		router := params.Handler.SetupRoutes()
-
-		port := os.Getenv("PORT")
-		if port == "" {
-			port = "8080"
-		}
-
-		log.Printf("Server starting on port %s", port)
-		return http.ListenAndServe(":"+port, router)
-	})
-
+	// Load configuration
+	var config di.Config
+	err := envconfig.Process("", &config)
 	if err != nil {
-		log.Fatal("Failed to start server:", err)
+		slog.Error("Failed to load configuration", "error", err)
+		os.Exit(1)
+	}
+
+	// Initialize container
+	container, err := di.NewContainer(config)
+	if err != nil {
+		slog.Error("Failed to initialize container", "error", err)
+		os.Exit(1)
+	}
+	defer container.DB.Close()
+
+	// Setup router
+	router := handler.NewRouter(container.Handlers, container.JWTService)
+
+	// Start server
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	slog.Info("Starting server", "port", port)
+	if err := http.ListenAndServe(":"+port, router); err != nil {
+		slog.Error("Server failed to start", "error", err)
+		os.Exit(1)
 	}
 }

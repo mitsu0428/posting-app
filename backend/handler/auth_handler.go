@@ -3,161 +3,181 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"posting-app/domain"
+
+	"posting-app/usecase"
 )
 
+type AuthHandler struct {
+	authUsecase *usecase.AuthUsecase
+}
+
+func NewAuthHandler(authUsecase *usecase.AuthUsecase) *AuthHandler {
+	return &AuthHandler{
+		authUsecase: authUsecase,
+	}
+}
+
 type RegisterRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email       string `json:"email" validate:"required,email"`
+	Password    string `json:"password" validate:"required,min=8"`
+	DisplayName string `json:"display_name" validate:"required,max=100"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type LoginResponse struct {
-	Token string       `json:"token"`
-	User  *domain.User `json:"user"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
 }
 
 type ForgotPasswordRequest struct {
-	Email string `json:"email"`
+	Email string `json:"email" validate:"required,email"`
 }
 
 type ResetPasswordRequest struct {
-	Token    string `json:"token"`
-	Password string `json:"password"`
+	Token       string `json:"token" validate:"required"`
+	NewPassword string `json:"new_password" validate:"required,min=8"`
 }
 
-type MessageResponse struct {
-	Message string `json:"message"`
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password" validate:"required,min=8"`
 }
 
-func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+type LoginResponse struct {
+	User        interface{} `json:"user"`
+	AccessToken string      `json:"access_token"`
+}
+
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	user, err := h.authUsecase.Register(req.Username, req.Email, req.Password)
+	if err := validate.Struct(req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	user, err := h.authUsecase.Register(req.Email, req.Password, req.DisplayName)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	// Remove sensitive data
+	user.PasswordHash = ""
+
+	writeJSON(w, http.StatusCreated, Response{
+		Message: "User registered successfully",
+		Data:    user,
+	})
 }
 
-func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	token, user, err := h.authUsecase.Login(req.Email, req.Password)
+	if err := validate.Struct(req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	user, token, err := h.authUsecase.Login(req.Email, req.Password)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	response := LoginResponse{
-		Token: token,
-		User:  user,
-	}
+	// Remove sensitive data
+	user.PasswordHash = ""
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, LoginResponse{
+		User:        user,
+		AccessToken: token,
+	})
 }
 
-func (h *Handler) AdminLogin(w http.ResponseWriter, r *http.Request) {
-	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	token, user, err := h.authUsecase.AdminLogin(req.Email, req.Password)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	response := LoginResponse{
-		Token: token,
-		User:  user,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, Response{
+		Message: "Logged out successfully",
+	})
 }
 
-func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "Logged out successfully"}`))
-}
-
-func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req ForgotPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if req.Email == "" {
-		http.Error(w, "Email is required", http.StatusBadRequest)
+	if err := validate.Struct(req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	err := h.authUsecase.ForgotPassword(req.Email)
 	if err != nil {
-		// セキュリティのため、ユーザーが存在しない場合でも成功レスポンスを返す
-		// 実際のエラーはログに記録
-		if err.Error() != "user not found" {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		writeError(w, http.StatusInternalServerError, "Failed to process password reset request")
+		return
 	}
 
-	response := MessageResponse{
-		Message: "パスワードリセットメールを送信しました",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, Response{
+		Message: "Password reset email sent if account exists",
+	})
 }
 
-func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var req ResetPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	if req.Token == "" || req.Password == "" {
-		http.Error(w, "Token and password are required", http.StatusBadRequest)
+	if err := validate.Struct(req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	err := h.authUsecase.ResetPassword(req.Token, req.Password)
+	err := h.authUsecase.ResetPassword(req.Token, req.NewPassword)
 	if err != nil {
-		if err.Error() == "invalid or expired token" {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	response := MessageResponse{
-		Message: "パスワードが正常にリセットされました",
+	writeJSON(w, http.StatusOK, Response{
+		Message: "Password reset successfully",
+	})
+}
+
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "User not authenticated")
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	err := h.authUsecase.ChangePassword(user.ID, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Response{
+		Message: "Password changed successfully",
+	})
 }

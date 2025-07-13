@@ -1,257 +1,281 @@
-# 掲示板アプリ - 完全会員制掲示板システム
+# Posting App
 
-完全会員制の掲示板アプリです。ユーザー認証、投稿管理、サブスクリプション決済、管理者機能を備えた本格的なウェブアプリケーションです。
+A subscription-based posting platform with admin moderation, built with Go backend and React frontend.
 
-## 📋 主な機能
+## Features
 
-### 📝 会員登録機能
-- ✅ 新規登録
-- ✅ ログイン（`/login`）
-- ✅ ログアウト
-- ✅ パスワードを忘れた時の動線（`/forgot-password`、`/reset-password`）
-- ✅ 管理者ログイン（`/admin-login-page`）
+### Authentication & User Management
+- User registration with email verification
+- JWT-based authentication (access + refresh tokens)
+- Password reset functionality
+- Admin and regular user roles
+- Account deactivation and user banning
 
-### 投稿機能
-- **スレッド作成**
-  - タイトル、サムネイル画像、内容での投稿
-  - 管理者による承認制
-- **返信機能**
-  - 匿名投稿対応
-  - ユーザー名表示選択可能
+### Content Management
+- Create, edit, and delete posts (with approval workflow)
+- Reply to posts (anonymous or with username)
+- Image upload support (thumbnails)
+- Content moderation by admins
+- Rich text content support
 
-### マイページ機能
-- 自分の投稿一覧表示
-- 投稿ステータス確認（承認待ち・承認済み・却下）
+### Subscription System
+- Stripe integration for subscription management
+- Content creation restricted to active subscribers
+- Subscription status tracking
+- Webhook support for real-time updates
+- Batch sync for webhook failure recovery
 
-### 管理者機能
-- スレッド承認・却下・削除
-- ユーザー一覧表示
-- ユーザーアカウント無効化
+### Admin Features
+- Post approval/rejection workflow
+- User management and banning
+- Content moderation dashboard
+- Admin-only access controls
 
-### 決済機能
-- Stripe決済によるサブスクリプション
-- サブスクリプション状態の自動管理
-- バッチ処理による定期的なステータス確認
+### Security & Performance
+- Rate limiting
+- XSS/CSRF protection
+- Secure file uploads
+- Optimized database queries
+- Comprehensive logging
 
-## 技術スタック
+## Tech Stack
 
-### フロントエンド
-- React 18
-- TypeScript
-- React Router Dom
-- Axios
-- Stripe.js
+### Backend
+- **Language**: Go 1.21
+- **Framework**: Chi router
+- **Database**: PostgreSQL with SQL migrations
+- **Authentication**: JWT with bcrypt
+- **Payment**: Stripe API
+- **Email**: SendGrid
+- **Validation**: go-playground/validator
+- **Logging**: slog + zerolog (JSON)
 
-### バックエンド
-- Go 1.21
-- Gorilla Mux
-- PostgreSQL
-- JWT認証
-- Stripe API
-- Clean Architecture（Handler → Usecase → Repository）
-- Dependency Injection（uber-go/dig）
+### Frontend
+- **Framework**: React 18 + TypeScript
+- **Styling**: PandaCSS + Material-UI (admin)
+- **State Management**: React Query + Context API
+- **Forms**: react-hook-form + zod validation
+- **File Upload**: react-dropzone + compressorjs
+- **Payments**: Stripe React components
+- **Testing**: React Testing Library
 
-### インフラ
-- Docker & Docker Compose
-- PostgreSQL 15
-- Nginx
+### Infrastructure
+- **API**: OpenAPI 3.0 specification
+- **Containers**: Docker + Docker Compose
+- **Database**: PostgreSQL 15
+- **File Storage**: Local filesystem (configurable)
+- **Deployment**: Cloud Run ready
 
-## セットアップ
+## Quick Start
 
-### 前提条件
-- Docker & Docker Compose
-- Node.js 18+
-- Go 1.21+
+### Prerequisites
+- Docker and Docker Compose
+- Node.js 18+ (for local frontend development)
+- Go 1.21+ (for local backend development)
 
-### 環境変数設定
+### Environment Setup
 
-`.env`ファイルを作成し、以下の環境変数を設定してください：
-
+1. Clone the repository:
 ```bash
+git clone <repository-url>
+cd posting-app
+```
+
+2. Copy environment variables:
+```bash
+cp .env.example .env
+```
+
+3. Configure your environment variables in `.env`:
+```env
 # Database
-DB_HOST=localhost
+DB_HOST=postgres
 DB_PORT=5432
 DB_USER=postgres
 DB_PASSWORD=password
 DB_NAME=posting_app
 
 # JWT
-JWT_SECRET=your-jwt-secret-key
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+JWT_ACCESS_DURATION=15m
+JWT_REFRESH_DURATION=720h
 
 # Stripe
-STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_API_KEY=sk_test_your_stripe_secret_key
+STRIPE_PRICE_ID=price_your_stripe_price_id
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
-STRIPE_PRICE_ID=price_your_price_id
 
-# Frontend
-REACT_APP_API_URL=http://localhost:8080/api
-REACT_APP_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
-FRONTEND_URL=http://localhost:3000
+# SendGrid
+SENDGRID_API_KEY=your_sendgrid_api_key
+
+# Application
+BASE_URL=http://localhost:3000
+PORT=8080
 ```
 
-### 起動方法
+### Development with Docker
 
-#### 🚀 簡単起動（推奨）- Makefileを使用
+1. Start all services:
 ```bash
-# ヘルプを表示
-make help
-
-# 開発環境を起動（全サービス）
-make dev
-
-# バックグラウンドで起動
-make up
-
-# 停止
-make down
-
-# キャッシュを完全クリアして起動
-make reset
+docker-compose up
 ```
 
-#### 📋 主なMakefileコマンド
-```bash
-# 開発環境管理
-make dev              # 開発環境起動（フォアグラウンド）
-make up               # 全サービス起動（バックグラウンド）
-make down             # 全サービス停止
-make restart          # 全サービス再起動
-make status           # サービス状態確認
+2. The application will be available at:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8080
+- Database: localhost:5432
 
-# データベース管理
-make db-up            # DBのみ起動
-make db-migrate       # マイグレーション実行
-make db-seed          # シードデータ投入
-make db-shell         # DB接続
+### Local Development
 
-# キャッシュクリア
-make clean            # ビルドキャッシュクリア
-make clean-all        # 全キャッシュ・イメージ削除
-make cache-clear      # Node.js/Dockerキャッシュクリア
-make reset            # 完全リセット
-
-# 品質チェック
-make check-all        # 全チェック実行
-make health           # ヘルスチェック
-```
-
-#### 📋 手動起動（従来の方法）
-```bash
-# 1. 環境変数設定
-cp .env.example .env
-# 必要に応じて .env を編集（Stripeキーなど）
-
-# 2. アプリケーション起動
-./start-dev.sh
-```
-
-#### 📋 手動起動
-
-1. **環境変数設定**
-```bash
-cp .env.example .env
-# .envファイルを編集してStripeキーなどを設定
-```
-
-2. **データベース起動**
-```bash
-docker-compose up -d postgres
-```
-
-3. **バックエンド起動**
+#### Backend
 ```bash
 cd backend
-go mod tidy
-go run main.go
+make deps
+make run
 ```
 
-4. **フロントエンド（開発用）**
+#### Frontend
 ```bash
 cd front
-npm install --legacy-peer-deps
+npm install
+npm run generate-api  # Generate API client from OpenAPI spec
 npm start
 ```
 
-### アクセス
-- フロントエンド: http://localhost:3000
-- バックエンドAPI: http://localhost:8080/api
-- 管理者ログイン: http://localhost:3000/admin-login-page
+## Default Admin Account
 
-### デフォルト管理者アカウント
-- Email: admin@example.com
-- Password: admin123
+The application seeds a default admin account:
+- **Email**: admin@example.com
+- **Password**: admin123
 
-## API仕様
+Access the admin dashboard at: http://localhost:3000/admin
 
-OpenAPIスキーマは`/api/schema.yaml`に定義されています。
+## API Documentation
 
-### 主要エンドポイント
+The API is documented using OpenAPI 3.0. The specification is located at `api/schema.yaml`.
 
-#### 認証
-- `POST /api/auth/register` - ユーザー登録
-- `POST /api/auth/login` - ログイン
-- `POST /api/admin/login` - 管理者ログイン
+Key endpoints:
+- `POST /auth/login` - User authentication
+- `POST /auth/register` - User registration
+- `GET /posts` - List approved posts
+- `POST /posts` - Create new post (requires subscription)
+- `POST /posts/{id}/replies` - Add reply to post
+- `GET /admin/posts` - Admin post management
+- `POST /subscription/create-checkout-session` - Create Stripe checkout
 
-#### 投稿
-- `GET /api/posts` - 投稿一覧取得
-- `POST /api/posts` - 投稿作成
-- `GET /api/posts/{id}` - 投稿詳細取得
-- `GET /api/posts/{id}/replies` - 返信一覧取得
-- `POST /api/posts/{id}/replies` - 返信作成
+## Database Schema
 
-#### 管理者
-- `GET /api/admin/posts` - 全投稿管理
-- `POST /api/admin/posts/{id}/approve` - 投稿承認
-- `POST /api/admin/posts/{id}/reject` - 投稿却下
-- `DELETE /api/admin/posts/{id}` - 投稿削除
+The application uses PostgreSQL with the following main tables:
+- `users` - User accounts and subscription status
+- `posts` - User-created content with approval status
+- `replies` - Comments on posts (can be anonymous)
+- `subscriptions` - Stripe subscription tracking
+- `password_resets` - Password reset tokens
 
-#### サブスクリプション
-- `POST /api/subscription/create-checkout-session` - 決済セッション作成
-- `POST /api/subscription/webhook` - Stripeウェブフック
+## Deployment
 
-## バッチ処理
+### Cloud Run Deployment
 
-サブスクリプション状態の確認バッチは以下で実行：
-
+1. Build production images:
 ```bash
-cd backend/batch
-go run subscription_batch.go
+# Backend
+cd backend
+make docker-build-cloudrun
+
+# Frontend
+cd front
+make build-cloudrun
 ```
 
-## 開発
+2. Deploy to Cloud Run with appropriate environment variables
 
-### テスト実行
+### Environment Variables for Production
 
-バックエンド：
+Ensure the following environment variables are configured:
+- All database connection details
+- JWT secret (generate a secure random string)
+- Stripe API keys and webhook secrets
+- SendGrid API key for email functionality
+- BASE_URL pointing to your frontend domain
+
+## Testing
+
+### Backend Tests
 ```bash
 cd backend
-go test ./...
+make test
+make test-coverage
 ```
 
-フロントエンド：
+### Frontend Tests
 ```bash
 cd front
 npm test
 ```
 
-### 型チェック・Lint
-
+### Linting
 ```bash
+# Backend
+cd backend
+make lint
+
+# Frontend
 cd front
-npm run typecheck
 npm run lint
 ```
 
-## デプロイ
+## Security Considerations
 
-本番環境では以下の設定を推奨：
+1. **Environment Variables**: Never commit secrets to version control
+2. **JWT Secrets**: Use strong, randomly generated secrets in production
+3. **HTTPS**: Always use HTTPS in production
+4. **Database**: Use strong passwords and restrict network access
+5. **File Uploads**: Validate file types and sizes
+6. **Rate Limiting**: Configure appropriate rate limits for your use case
 
-1. 環境変数の適切な設定
-2. HTTPS の有効化
-3. データベースの適切な設定
-4. Stripe本番キーの使用
-5. セキュリティヘッダーの設定
+## Contributing
 
-## ライセンス
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and add tests
+4. Run the test suite: `make test` (backend) and `npm test` (frontend)
+5. Commit your changes: `git commit -am 'Add feature'`
+6. Push to the branch: `git push origin feature-name`
+7. Submit a pull request
 
-MIT License
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Support
+
+For support and questions:
+1. Check the documentation in this README
+2. Review the API specification in `api/schema.yaml`
+3. Open an issue on GitHub
+4. Contact the development team
+
+## Architecture Overview
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   React App     │    │   Go Backend    │    │   PostgreSQL    │
+│                 │    │                 │    │                 │
+│ • Auth Context  │◄──►│ • JWT Auth      │◄──►│ • Users         │
+│ • Post Mgmt     │    │ • Post API      │    │ • Posts         │
+│ • Admin UI      │    │ • Admin API     │    │ • Replies       │
+│ • Stripe UI     │    │ • Stripe API    │    │ • Subscriptions │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │
+         │              ┌─────────────────┐
+         │              │   Stripe API    │
+         └──────────────►│                 │
+                        │ • Subscriptions │
+                        │ • Webhooks      │
+                        └─────────────────┘
+```
+
+The application follows Clean Architecture principles with clear separation between:
+- **Presentation Layer**: React components and pages
+- **Business Logic**: Go usecases and domain models
+- **Data Layer**: PostgreSQL repositories and external APIs

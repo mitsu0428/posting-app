@@ -2,55 +2,60 @@ package repository
 
 import (
 	"database/sql"
+
 	"posting-app/domain"
 )
 
-type passwordResetRepository struct {
+type PasswordResetRepository struct {
 	db *sql.DB
 }
 
-func NewPasswordResetRepository(db *sql.DB) domain.PasswordResetRepository {
-	return &passwordResetRepository{db: db}
+func NewPasswordResetRepository(db *sql.DB) *PasswordResetRepository {
+	return &PasswordResetRepository{db: db}
 }
 
-func (r *passwordResetRepository) Create(reset *domain.PasswordReset) error {
+func (r *PasswordResetRepository) Create(reset *domain.PasswordReset) error {
 	query := `
-		INSERT INTO password_resets (user_id, token, expires_at, created_at)
-		VALUES ($1, $2, $3, NOW())
-		RETURNING id, created_at
-	`
-	return r.db.QueryRow(query, reset.UserID, reset.Token, reset.ExpiresAt).
-		Scan(&reset.ID, &reset.CreatedAt)
-}
+		INSERT INTO password_resets (user_id, token, expires_at)
+		VALUES ($1, $2, $3)
+		RETURNING id, created_at`
 
-func (r *passwordResetRepository) GetByToken(token string) (*domain.PasswordReset, error) {
-	query := `
-		SELECT id, user_id, token, expires_at, created_at
-		FROM password_resets
-		WHERE token = $1 AND expires_at > NOW()
-	`
-	reset := &domain.PasswordReset{}
-	err := r.db.QueryRow(query, token).Scan(
-		&reset.ID,
-		&reset.UserID,
-		&reset.Token,
-		&reset.ExpiresAt,
-		&reset.CreatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return reset, nil
-}
+	err := r.db.QueryRow(
+		query,
+		reset.UserID,
+		reset.Token,
+		reset.ExpiresAt,
+	).Scan(&reset.ID, &reset.CreatedAt)
 
-func (r *passwordResetRepository) DeleteByUserID(userID int) error {
-	query := `DELETE FROM password_resets WHERE user_id = $1`
-	_, err := r.db.Exec(query, userID)
 	return err
 }
 
-func (r *passwordResetRepository) DeleteExpired() error {
-	query := `DELETE FROM password_resets WHERE expires_at <= NOW()`
+func (r *PasswordResetRepository) GetByToken(token string) (*domain.PasswordReset, error) {
+	reset := &domain.PasswordReset{}
+	query := `
+		SELECT id, user_id, token, expires_at, used_at, created_at
+		FROM password_resets 
+		WHERE token = $1 AND expires_at > CURRENT_TIMESTAMP AND used_at IS NULL`
+
+	err := r.db.QueryRow(query, token).Scan(
+		&reset.ID, &reset.UserID, &reset.Token, &reset.ExpiresAt, &reset.UsedAt, &reset.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return reset, nil
+}
+
+func (r *PasswordResetRepository) MarkAsUsed(id int) error {
+	query := `UPDATE password_resets SET used_at = CURRENT_TIMESTAMP WHERE id = $1`
+	_, err := r.db.Exec(query, id)
+	return err
+}
+
+func (r *PasswordResetRepository) DeleteExpired() error {
+	query := `DELETE FROM password_resets WHERE expires_at < CURRENT_TIMESTAMP`
 	_, err := r.db.Exec(query)
 	return err
 }

@@ -1,16 +1,44 @@
-// 生成された型定義を再エクスポート
-export * from '../generated/models';
-
-// 追加のコンテキスト型定義（生成された型を使用）
-export interface AuthContextType {
-  user: import('../generated/models').User | null;
-  token: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  adminLogin: (email: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+export interface User {
+  id: number;
+  email: string;
+  display_name: string;
+  bio?: string;
+  role: 'user' | 'admin';
+  subscription_status: 'active' | 'inactive' | 'past_due' | 'canceled';
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
-// 旧来の手動型定義は削除し、生成された型を使用
-// 既存のコンポーネントとの互換性のため、必要に応じて型エイリアスを作成
-export type { User, Post, Reply, CreatePostRequest, CreateReplyRequest } from '../generated/models';
+export interface Post {
+  id: number;
+  title: string;
+  content: string;
+  thumbnail_url?: string;
+  author: User;
+  status: 'pending' | 'approved' | 'rejected';
+  replies?: Reply[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Reply {
+  id: number;
+  content: string;
+  post_id: number;
+  author?: User;
+  is_anonymous: boolean;
+  created_at: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface SubscriptionStatus {
+  status: 'active' | 'inactive' | 'past_due' | 'canceled';
+  current_period_end?: string;
+}

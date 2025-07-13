@@ -1,93 +1,118 @@
-import React, { useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { authAPI } from "../utils/api";
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { authApi } from '../utils/api';
 
-const ResetPassword: React.FC = () => {
+export const ResetPassword: React.FC = () => {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const token = searchParams.get('token');
 
-  const token = searchParams.get("token");
+  useEffect(() => {
+    if (!token) {
+      setError('Invalid or missing reset token');
+    }
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-
-    if (newPassword !== confirmPassword) {
-      setError("パスワードが一致しません");
-      return;
-    }
-
+    
     if (!token) {
-      setError("無効なリセットトークンです");
+      setError('Invalid or missing reset token');
       return;
     }
 
-    setLoading(true);
+    if (!password || !confirmPassword) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
 
     try {
-      await authAPI.resetPassword(token, newPassword);
-      alert("パスワードがリセットされました。新しいパスワードでログインしてください。");
-      navigate("/login");
-    } catch (err) {
-      setError("パスワードリセットに失敗しました。トークンが無効または期限切れの可能性があります。");
+      setLoading(true);
+      setError('');
+      
+      await authApi.resetPassword(token, password);
+      setSuccess('Password reset successful! You can now log in with your new password.');
+      
+      // Redirect to login after 3 seconds
+      setTimeout(() => {
+        navigate('/login');
+      }, 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Password reset failed');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!token) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full bg-white shadow-lg rounded-xl p-8 text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">無効なリンク</h1>
-          <p className="text-gray-600 mb-6">
-            パスワードリセットリンクが無効です。
-          </p>
-          <a href="/login" className="text-blue-600 hover:text-blue-700">
-            ログインページに戻る
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  // Basic styles
-  const containerStyles = "min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4";
-  const cardStyles = "max-w-md w-full bg-white shadow-lg rounded-xl p-8";
-  const titleStyles = "text-2xl font-bold text-center text-gray-900 mb-8";
-  const fieldStyles = "mb-6";
-  const labelStyles = "block text-sm font-medium text-gray-700 mb-2";
-  const inputStyles = "w-full px-3 py-2 border border-gray-300 rounded-md text-sm transition-all focus:outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-100";
-  const errorStyles = "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4 text-sm";
-  const buttonStyles = "w-full bg-blue-600 text-white py-3 px-4 rounded-md text-sm font-medium border-none cursor-pointer transition-all hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed";
-
   return (
-    <div className={containerStyles}>
-      <div className={cardStyles}>
-        <h1 className={titleStyles}>新しいパスワードを設定</h1>
-        <form onSubmit={handleSubmit}>
-          <div className={fieldStyles}>
-            <label htmlFor="newPassword" className={labelStyles}>
-              新しいパスワード
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f9fafb' }}>
+      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', width: '100%', maxWidth: '400px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1f2937' }}>
+            Reset your password
+          </h2>
+          <p style={{ marginTop: '0.5rem', color: '#6b7280' }}>
+            Enter your new password below.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {error && (
+            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+              {success}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              New Password
             </label>
             <input
-              id="newPassword"
+              id="password"
               type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              className={inputStyles}
-              placeholder="8文字以上のパスワードを入力"
+              disabled={!token || loading}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+                backgroundColor: (!token || loading) ? '#f9fafb' : 'white',
+              }}
+              placeholder="Enter your new password (min 8 characters)"
             />
           </div>
-          <div className={fieldStyles}>
-            <label htmlFor="confirmPassword" className={labelStyles}>
-              パスワード確認
+
+          <div>
+            <label htmlFor="confirmPassword" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              Confirm New Password
             </label>
             <input
               id="confirmPassword"
@@ -95,22 +120,45 @@ const ResetPassword: React.FC = () => {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              className={inputStyles}
-              placeholder="パスワードを再入力"
+              disabled={!token || loading}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+                backgroundColor: (!token || loading) ? '#f9fafb' : 'white',
+              }}
+              placeholder="Confirm your new password"
             />
           </div>
-          {error && <div className={errorStyles}>{error}</div>}
+
           <button
             type="submit"
-            disabled={loading}
-            className={buttonStyles}
+            disabled={!token || loading}
+            style={{
+              width: '100%',
+              backgroundColor: (!token || loading) ? '#9ca3af' : '#2563eb',
+              color: 'white',
+              padding: '0.75rem',
+              border: 'none',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: (!token || loading) ? 'not-allowed' : 'pointer',
+            }}
           >
-            {loading ? "更新中..." : "パスワードを更新"}
+            {loading ? 'Resetting password...' : 'Reset password'}
           </button>
         </form>
+
+        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+          <Link to="/login" style={{ color: '#2563eb', textDecoration: 'none', fontSize: '0.875rem' }}>
+            ← Back to login
+          </Link>
+        </div>
       </div>
     </div>
   );
 };
-
-export default ResetPassword;

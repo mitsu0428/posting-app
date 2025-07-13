@@ -1,37 +1,18 @@
-# Node.js の公式イメージ（セキュリティアップデート版）
-FROM node:20-alpine AS build
+FROM node:18-alpine
 
-# 作業ディレクトリ作成
 WORKDIR /app
 
-# package.jsonとpackage-lock.jsonをコピー
+# Copy package files
 COPY package*.json ./
 
-# 依存関係をインストール
-RUN npm ci --legacy-peer-deps
+# Install dependencies
+RUN npm install
 
-# アプリの全ファイルをコピー（Pandaの設定ファイルを含む）
+# Copy source code
 COPY . .
 
-# OpenAPI schema をコピー
-COPY ../api ./api
-
-# API生成とビルド
-RUN npm run api:generate
-RUN npm run panda
-RUN npm run build
-
-# ============================
-# 本番サーバー（Nginx）で配信
-# ============================
-FROM nginx:alpine
-
-# React Router のルーティング対応: fallback を index.html に
-COPY ../front/nginx.conf /etc/nginx/nginx.conf
-
-# ビルド成果物を Nginx に配置
-COPY --from=build /app/build /usr/share/nginx/html
-
+# Expose port
 EXPOSE 3000
 
-CMD ["nginx", "-g", "daemon off;"]
+# Start development server
+CMD ["npm", "start"]

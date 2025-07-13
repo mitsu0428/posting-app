@@ -1,87 +1,113 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-// import { css } from '../../styled-system/css';
-// import { center } from '../../styled-system/patterns';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { authApi } from '../utils/api';
 
-const Register: React.FC = () => {
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
+export const Register: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-
-    if (password !== confirmPassword) {
-      setError("パスワードが一致しません");
+    
+    if (!email || !password || !confirmPassword || !displayName) {
+      setError('Please fill in all fields');
       return;
     }
 
-    setLoading(true);
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+
+    if (displayName.length > 100) {
+      setError('Display name must be less than 100 characters');
+      return;
+    }
 
     try {
-      await register(username, email, password);
-      alert("ユーザー登録が完了しました。ログインしてください。");
-      navigate("/login");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "ユーザー登録に失敗しました"
-      );
+      setLoading(true);
+      setError('');
+      
+      await authApi.register(email, password, displayName);
+      setSuccess('Registration successful! You can now log in.');
+      
+      // Redirect to login after 2 seconds
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
   };
 
-  // Temporary basic styles
-  const containerStyles =
-    "min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4";
-  const cardStyles = "max-w-md w-full bg-white shadow-lg rounded-xl p-8";
-  const titleStyles = "text-2xl font-bold text-center text-gray-900 mb-8";
-  const fieldStyles = "mb-6";
-  const labelStyles = "block text-sm font-medium text-gray-700 mb-2";
-  const inputStyles =
-    "w-full px-3 py-2 border border-gray-300 rounded-md text-sm";
-  const errorStyles =
-    "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4 text-sm";
-  const buttonStyles =
-    "w-full bg-blue-600 text-white py-3 px-4 rounded-md text-sm font-medium border-none cursor-pointer";
-  const linkContainerStyles = "text-center mt-6";
-  const linkStyles = "text-blue-600 no-underline text-sm";
-
   return (
-    <div className={containerStyles}>
-      <div className={cardStyles}>
-        <h1 className={titleStyles}>新規登録</h1>
-        <form onSubmit={handleSubmit}>
-          <div className={fieldStyles}>
-            <label
-              htmlFor="username"
-              className={labelStyles}
-            >
-              ユーザー名
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f9fafb' }}>
+      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', width: '100%', maxWidth: '400px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1f2937' }}>
+            Create your account
+          </h2>
+          <p style={{ marginTop: '0.5rem', color: '#6b7280' }}>
+            Already have an account?{' '}
+            <Link to="/login" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
+              Sign in
+            </Link>
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {error && (
+            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+              {success}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="displayName" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              Display Name
             </label>
             <input
-              id="username"
+              id="displayName"
               type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
               required
-              className={inputStyles}
-              placeholder="お名前を入力してください"
+              maxLength={100}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Enter your display name"
             />
           </div>
-          <div className={fieldStyles}>
-            <label
-              htmlFor="email"
-              className={labelStyles}
-            >
-              メールアドレス
+
+          <div>
+            <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              Email address
             </label>
             <input
               id="email"
@@ -89,16 +115,21 @@ const Register: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className={inputStyles}
-              placeholder="your-email@example.com"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Enter your email"
             />
           </div>
-          <div className={fieldStyles}>
-            <label
-              htmlFor="password"
-              className={labelStyles}
-            >
-              パスワード
+
+          <div>
+            <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              Password
             </label>
             <input
               id="password"
@@ -106,16 +137,22 @@ const Register: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className={inputStyles}
-              placeholder="8文字以上のパスワードを入力"
+              minLength={8}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Enter your password (min 8 characters)"
             />
           </div>
-          <div className={fieldStyles}>
-            <label
-              htmlFor="confirmPassword"
-              className={labelStyles}
-            >
-              パスワード確認
+
+          <div>
+            <label htmlFor="confirmPassword" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              Confirm Password
             </label>
             <input
               id="confirmPassword"
@@ -123,30 +160,37 @@ const Register: React.FC = () => {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              className={inputStyles}
-              placeholder="パスワードを再入力してください"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Confirm your password"
             />
           </div>
-          {error && <div className={errorStyles}>{error}</div>}
+
           <button
             type="submit"
             disabled={loading}
-            className={buttonStyles}
+            style={{
+              width: '100%',
+              backgroundColor: loading ? '#9ca3af' : '#2563eb',
+              color: 'white',
+              padding: '0.75rem',
+              border: 'none',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
           >
-            {loading ? "登録中..." : "新規登録"}
+            {loading ? 'Creating account...' : 'Create account'}
           </button>
         </form>
-        <div className={linkContainerStyles}>
-          <Link
-            to="/login"
-            className={linkStyles}
-          >
-            既にアカウントをお持ちの方はこちら
-          </Link>
-        </div>
       </div>
     </div>
   );
 };
-
-export default Register;

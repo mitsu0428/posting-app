@@ -1,528 +1,446 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useAuth } from "../context/AuthContext";
-import { adminAPI } from "../utils/api";
-import type { Post, User } from "../types";
+import React, { useState, useEffect } from 'react';
+import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
+import { Button, Tabs, Tab, Box, Chip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { CheckCircle, Cancel, Visibility, Block } from '@mui/icons-material';
+import { adminApi } from '../utils/api';
+import { Post, User, PaginatedResponse } from '../types';
 
-const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"posts" | "users">("posts");
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
-  const { logout } = useAuth();
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
 
-  const loadPosts = useCallback(async () => {
-    setLoading(true);
-    try {
-      const postsData = await adminAPI.getPosts(statusFilter || undefined);
-      setPosts(postsData);
-    } catch (err) {
-      setError("投稿の読み込みに失敗しました");
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter]);
-
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const usersData = await adminAPI.getUsers();
-      setUsers(usersData);
-    } catch (err) {
-      setError("ユーザーの読み込みに失敗しました");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === "posts") {
-      loadPosts();
-    } else {
-      loadUsers();
-    }
-  }, [activeTab, statusFilter, loadPosts, loadUsers]);
-
-  const handleApprovePost = async (id: number) => {
-    try {
-      await adminAPI.approvePost(id);
-      alert("投稿を承認しました");
-      loadPosts();
-    } catch (err) {
-      alert("承認に失敗しました");
-    }
-  };
-
-  const handleRejectPost = async (id: number) => {
-    if (!window.confirm("本当に却下しますか？")) return;
-    try {
-      await adminAPI.rejectPost(id);
-      alert("投稿を却下しました");
-      loadPosts();
-    } catch (err) {
-      alert("却下に失敗しました");
-    }
-  };
-
-  const handleDeletePost = async (id: number) => {
-    if (!window.confirm("本当に削除しますか？この操作は取り消せません。"))
-      return;
-    try {
-      await adminAPI.deletePost(id);
-      alert("投稿を削除しました");
-      loadPosts();
-    } catch (err) {
-      alert("削除に失敗しました");
-    }
-  };
-
-  const handleDeactivateUser = async (id: number) => {
-    if (!window.confirm("本当にこのユーザーを無効化しますか？")) return;
-    try {
-      await adminAPI.deactivateUser(id);
-      alert("ユーザーを無効化しました");
-      loadUsers();
-    } catch (err) {
-      alert("無効化に失敗しました");
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("ja-JP", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "承認待ち";
-      case "approved":
-        return "承認済み";
-      case "rejected":
-        return "却下";
-      default:
-        return status;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "pending":
-        return "#ffc107";
-      case "approved":
-        return "#28a745";
-      case "rejected":
-        return "#dc3545";
-      default:
-        return "#6c757d";
-    }
-  };
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f8f9fa" }}>
-      <nav
-        style={{
-          backgroundColor: "#dc3545",
-          padding: "1rem",
-          color: "white",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <h1 style={{ margin: 0 }}>管理者ダッシュボード</h1>
-          <button
-            onClick={logout}
-            style={{
-              padding: "0.5rem 1rem",
-              backgroundColor: "#fff",
-              color: "#dc3545",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            ログアウト
-          </button>
-        </div>
-      </nav>
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`admin-tabpanel-${index}`}
+      aria-labelledby={`admin-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    </div>
+  );
+}
 
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem" }}>
-        <div style={{ marginBottom: "2rem" }}>
-          <button
-            onClick={() => setActiveTab("posts")}
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: activeTab === "posts" ? "#007bff" : "#6c757d",
-              color: "white",
-              border: "none",
-              borderRadius: "4px 0 0 4px",
-              cursor: "pointer",
-            }}
-          >
-            投稿管理
-          </button>
-          <button
-            onClick={() => setActiveTab("users")}
-            style={{
-              padding: "0.75rem 1.5rem",
-              backgroundColor: activeTab === "users" ? "#007bff" : "#6c757d",
-              color: "white",
-              border: "none",
-              borderRadius: "0 4px 4px 0",
-              cursor: "pointer",
-            }}
-          >
-            ユーザー管理
-          </button>
-        </div>
+export const AdminDashboard: React.FC = () => {
+  const [tabValue, setTabValue] = useState(0);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [postFilter, setPostFilter] = useState<string>('all');
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-        {error && (
-          <div
-            style={{
-              color: "red",
-              marginBottom: "1rem",
-              padding: "1rem",
-              backgroundColor: "#f8d7da",
-              borderRadius: "4px",
-            }}
-          >
-            {error}
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  useEffect(() => {
+    if (tabValue === 0) {
+      fetchPosts();
+    } else if (tabValue === 1) {
+      fetchUsers();
+    }
+  }, [tabValue, postFilter]);
+
+  const fetchPosts = async () => {
+    try {
+      setPostsLoading(true);
+      setError('');
+      const statusParam = postFilter === 'all' ? undefined : postFilter;
+      const response: PaginatedResponse<Post> = await adminApi.getPosts(1, 100, statusParam);
+      setPosts(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to fetch posts');
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      setUsersLoading(true);
+      setError('');
+      const response: PaginatedResponse<User> = await adminApi.getUsers(1, 100);
+      setUsers(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to fetch users');
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const handleApprovePost = async (postId: number) => {
+    try {
+      setActionLoading(true);
+      await adminApi.approvePost(postId);
+      setSuccess('Post approved successfully');
+      fetchPosts();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to approve post');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectPost = async (postId: number) => {
+    try {
+      setActionLoading(true);
+      await adminApi.rejectPost(postId);
+      setSuccess('Post rejected successfully');
+      fetchPosts();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to reject post');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBanUser = async (userId: number) => {
+    if (!window.confirm('Are you sure you want to ban this user?')) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await adminApi.banUser(userId);
+      setSuccess('User banned successfully');
+      fetchUsers();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to ban user');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleViewPost = (post: Post) => {
+    setSelectedPost(post);
+    setViewDialogOpen(true);
+  };
+
+  const getStatusChip = (status: string) => {
+    const statusConfig = {
+      pending: { color: 'warning' as const, label: 'Pending' },
+      approved: { color: 'success' as const, label: 'Approved' },
+      rejected: { color: 'error' as const, label: 'Rejected' },
+    };
+
+    const config = statusConfig[status as keyof typeof statusConfig] || { color: 'default' as const, label: status };
+    return <Chip label={config.label} color={config.color} size="small" />;
+  };
+
+  const getSubscriptionChip = (status: string) => {
+    const statusConfig = {
+      active: { color: 'success' as const, label: 'Active' },
+      inactive: { color: 'default' as const, label: 'Inactive' },
+      past_due: { color: 'warning' as const, label: 'Past Due' },
+      canceled: { color: 'error' as const, label: 'Canceled' },
+    };
+
+    const config = statusConfig[status as keyof typeof statusConfig] || { color: 'default' as const, label: status };
+    return <Chip label={config.label} color={config.color} size="small" />;
+  };
+
+  const postColumns: GridColDef[] = [
+    { field: 'id', headerName: 'ID', width: 70 },
+    { field: 'title', headerName: 'Title', width: 250 },
+    { 
+      field: 'author', 
+      headerName: 'Author', 
+      width: 150,
+      valueGetter: (params) => params.row.author?.display_name || 'Unknown'
+    },
+    { 
+      field: 'status', 
+      headerName: 'Status', 
+      width: 120,
+      renderCell: (params) => getStatusChip(params.value)
+    },
+    { 
+      field: 'created_at', 
+      headerName: 'Created', 
+      width: 150,
+      valueGetter: (params) => new Date(params.value).toLocaleDateString()
+    },
+    {
+      field: 'actions',
+      type: 'actions',
+      headerName: 'Actions',
+      width: 150,
+      getActions: (params) => [
+        <GridActionsCellItem
+          icon={<Visibility />}
+          label="View"
+          onClick={() => handleViewPost(params.row)}
+        />,
+        ...(params.row.status === 'pending' ? [
+          <GridActionsCellItem
+            icon={<CheckCircle />}
+            label="Approve"
+            onClick={() => handleApprovePost(params.row.id)}
+            disabled={actionLoading}
+          />,
+          <GridActionsCellItem
+            icon={<Cancel />}
+            label="Reject"
+            onClick={() => handleRejectPost(params.row.id)}
+            disabled={actionLoading}
+          />
+        ] : [])
+      ],
+    },
+  ];
+
+  const userColumns: GridColDef[] = [
+    { field: 'id', headerName: 'ID', width: 70 },
+    { field: 'email', headerName: 'Email', width: 200 },
+    { field: 'display_name', headerName: 'Display Name', width: 150 },
+    { field: 'role', headerName: 'Role', width: 100 },
+    { 
+      field: 'subscription_status', 
+      headerName: 'Subscription', 
+      width: 120,
+      renderCell: (params) => getSubscriptionChip(params.value)
+    },
+    { 
+      field: 'is_active', 
+      headerName: 'Status', 
+      width: 100,
+      renderCell: (params) => (
+        <Chip 
+          label={params.value ? 'Active' : 'Banned'} 
+          color={params.value ? 'success' : 'error'} 
+          size="small" 
+        />
+      )
+    },
+    { 
+      field: 'created_at', 
+      headerName: 'Joined', 
+      width: 150,
+      valueGetter: (params) => new Date(params.value).toLocaleDateString()
+    },
+    {
+      field: 'actions',
+      type: 'actions',
+      headerName: 'Actions',
+      width: 100,
+      getActions: (params) => [
+        ...(params.row.is_active && params.row.role !== 'admin' ? [
+          <GridActionsCellItem
+            icon={<Block />}
+            label="Ban"
+            onClick={() => handleBanUser(params.row.id)}
+            disabled={actionLoading}
+          />
+        ] : [])
+      ],
+    },
+  ];
+
+  return (
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '2rem' }}>
+        Admin Dashboard
+      </h1>
+
+      {error && (
+        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', marginBottom: '1rem' }}>
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', padding: '0.75rem', borderRadius: '0.375rem', marginBottom: '1rem' }}>
+          {success}
+        </div>
+      )}
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', marginBottom: 2 }}>
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          <Tab label="Posts Management" />
+          <Tab label="Users Management" />
+        </Tabs>
+      </Box>
+
+      <TabPanel value={tabValue} index={0}>
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+            <Button
+              variant={postFilter === 'all' ? 'contained' : 'outlined'}
+              onClick={() => setPostFilter('all')}
+            >
+              All Posts
+            </Button>
+            <Button
+              variant={postFilter === 'pending' ? 'contained' : 'outlined'}
+              onClick={() => setPostFilter('pending')}
+            >
+              Pending
+            </Button>
+            <Button
+              variant={postFilter === 'approved' ? 'contained' : 'outlined'}
+              onClick={() => setPostFilter('approved')}
+            >
+              Approved
+            </Button>
+            <Button
+              variant={postFilter === 'rejected' ? 'contained' : 'outlined'}
+              onClick={() => setPostFilter('rejected')}
+            >
+              Rejected
+            </Button>
           </div>
-        )}
+        </div>
 
-        {activeTab === "posts" && (
-          <div>
-            <div style={{ marginBottom: "1rem" }}>
-              <label htmlFor="statusFilter">ステータスフィルター:</label>
-              <select
-                id="statusFilter"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={{ marginLeft: "0.5rem", padding: "0.5rem" }}
-              >
-                <option value="">すべて</option>
-                <option value="pending">承認待ち</option>
-                <option value="approved">承認済み</option>
-                <option value="rejected">却下</option>
-              </select>
-            </div>
+        <div style={{ height: 600, width: '100%', backgroundColor: 'white' }}>
+          <DataGrid
+            rows={posts}
+            columns={postColumns}
+            loading={postsLoading}
+            initialState={{
+              pagination: {
+                paginationModel: { page: 0, pageSize: 10 }
+              }
+            }}
+            pageSizeOptions={[10, 25, 50]}
+            disableRowSelectionOnClick
+          />
+        </div>
+      </TabPanel>
 
-            {loading ? (
-              <div>読み込み中...</div>
-            ) : (
-              <div>
-                <h2>投稿一覧 ({posts.length}件)</h2>
-                {posts.length === 0 ? (
-                  <p>該当する投稿がありません。</p>
-                ) : (
-                  <div>
-                    {posts.map((post) => (
-                      <div
-                        key={post.id}
-                        style={{
-                          border: "1px solid #ddd",
-                          borderRadius: "8px",
-                          padding: "1rem",
-                          marginBottom: "1rem",
-                          backgroundColor: "white",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            marginBottom: "1rem",
-                          }}
-                        >
-                          <div>
-                            <h3 style={{ margin: "0 0 0.5rem 0" }}>
-                              {post.title}
-                            </h3>
-                            <p
-                              style={{ color: "#666", margin: "0 0 0.5rem 0" }}
-                            >
-                              投稿者ID: {post.user_id} | 投稿日:{" "}
-                              {post.created_at ? formatDate(post.created_at) : 'N/A'}
-                            </p>
-                            <span
-                              style={{
-                                padding: "0.25rem 0.5rem",
-                                borderRadius: "4px",
-                                color: "white",
-                                backgroundColor: post.status ? getStatusColor(post.status) : '#gray',
-                                fontSize: "0.8rem",
-                              }}
-                            >
-                              {post.status ? getStatusText(post.status) : 'Unknown'}
-                            </span>
-                          </div>
-                          <div style={{ display: "flex", gap: "0.5rem" }}>
-                            {post.status === "pending" && (
-                              <>
-                                <button
-                                  onClick={() => post.id && handleApprovePost(post.id)}
-                                  style={{
-                                    padding: "0.5rem 1rem",
-                                    backgroundColor: "#28a745",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  承認
-                                </button>
-                                <button
-                                  onClick={() => post.id && handleRejectPost(post.id)}
-                                  style={{
-                                    padding: "0.5rem 1rem",
-                                    backgroundColor: "#ffc107",
-                                    color: "black",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  却下
-                                </button>
-                              </>
-                            )}
-                            <button
-                              onClick={() => post.id && handleDeletePost(post.id)}
-                              style={{
-                                padding: "0.5rem 1rem",
-                                backgroundColor: "#dc3545",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                              }}
-                            >
-                              削除
-                            </button>
-                          </div>
+      <TabPanel value={tabValue} index={1}>
+        <div style={{ height: 600, width: '100%', backgroundColor: 'white' }}>
+          <DataGrid
+            rows={users}
+            columns={userColumns}
+            loading={usersLoading}
+            initialState={{
+              pagination: {
+                paginationModel: { page: 0, pageSize: 10 }
+              }
+            }}
+            pageSizeOptions={[10, 25, 50]}
+            disableRowSelectionOnClick
+          />
+        </div>
+      </TabPanel>
+
+      {/* Post View Dialog */}
+      <Dialog 
+        open={viewDialogOpen} 
+        onClose={() => setViewDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Post Details
+        </DialogTitle>
+        <DialogContent>
+          {selectedPost && (
+            <div>
+              <div style={{ marginBottom: '1rem' }}>
+                <strong>Title:</strong> {selectedPost.title}
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <strong>Author:</strong> {selectedPost.author?.display_name}
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <strong>Status:</strong> {getStatusChip(selectedPost.status)}
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <strong>Created:</strong> {new Date(selectedPost.created_at).toLocaleString()}
+              </div>
+              {selectedPost.thumbnail_url && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <strong>Thumbnail:</strong>
+                  <br />
+                  <img 
+                    src={selectedPost.thumbnail_url} 
+                    alt="Post thumbnail" 
+                    style={{ maxWidth: '200px', maxHeight: '150px', objectFit: 'cover', borderRadius: '4px', marginTop: '0.5rem' }}
+                  />
+                </div>
+              )}
+              <div style={{ marginBottom: '1rem' }}>
+                <strong>Content:</strong>
+                <div style={{ 
+                  padding: '1rem', 
+                  backgroundColor: '#f9fafb', 
+                  borderRadius: '4px', 
+                  marginTop: '0.5rem',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}>
+                  {selectedPost.content}
+                </div>
+              </div>
+              {selectedPost.replies && selectedPost.replies.length > 0 && (
+                <div>
+                  <strong>Replies ({selectedPost.replies.length}):</strong>
+                  <div style={{ marginTop: '0.5rem' }}>
+                    {selectedPost.replies.map((reply) => (
+                      <div key={reply.id} style={{ 
+                        padding: '0.5rem', 
+                        backgroundColor: '#f3f4f6', 
+                        borderRadius: '4px', 
+                        marginBottom: '0.5rem',
+                        fontSize: '0.875rem'
+                      }}>
+                        <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>
+                          {reply.is_anonymous ? 'Anonymous' : reply.author?.display_name || 'Unknown'} • {new Date(reply.created_at).toLocaleDateString()}
                         </div>
-                        <p
-                          style={{
-                            margin: 0,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 3,
-                            WebkitBoxOrient: "vertical",
-                          }}
-                        >
-                          {post.content}
-                        </p>
+                        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {reply.content}
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "users" && (
-          <div>
-            {loading ? (
-              <div>読み込み中...</div>
-            ) : (
-              <div>
-                <h2>ユーザー一覧 ({users.length}件)</h2>
-                {users.length === 0 ? (
-                  <p>ユーザーがいません。</p>
-                ) : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table
-                      style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        backgroundColor: "white",
-                      }}
-                    >
-                      <thead>
-                        <tr style={{ backgroundColor: "#f8f9fa" }}>
-                          <th
-                            style={{
-                              padding: "1rem",
-                              textAlign: "left",
-                              border: "1px solid #ddd",
-                            }}
-                          >
-                            ID
-                          </th>
-                          <th
-                            style={{
-                              padding: "1rem",
-                              textAlign: "left",
-                              border: "1px solid #ddd",
-                            }}
-                          >
-                            ユーザー名
-                          </th>
-                          <th
-                            style={{
-                              padding: "1rem",
-                              textAlign: "left",
-                              border: "1px solid #ddd",
-                            }}
-                          >
-                            メール
-                          </th>
-                          <th
-                            style={{
-                              padding: "1rem",
-                              textAlign: "left",
-                              border: "1px solid #ddd",
-                            }}
-                          >
-                            サブスク状態
-                          </th>
-                          <th
-                            style={{
-                              padding: "1rem",
-                              textAlign: "left",
-                              border: "1px solid #ddd",
-                            }}
-                          >
-                            管理者
-                          </th>
-                          <th
-                            style={{
-                              padding: "1rem",
-                              textAlign: "left",
-                              border: "1px solid #ddd",
-                            }}
-                          >
-                            登録日
-                          </th>
-                          <th
-                            style={{
-                              padding: "1rem",
-                              textAlign: "left",
-                              border: "1px solid #ddd",
-                            }}
-                          >
-                            操作
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {users.map((user) => (
-                          <tr key={user.id}>
-                            <td
-                              style={{
-                                padding: "1rem",
-                                border: "1px solid #ddd",
-                              }}
-                            >
-                              {user.id}
-                            </td>
-                            <td
-                              style={{
-                                padding: "1rem",
-                                border: "1px solid #ddd",
-                              }}
-                            >
-                              {user.username}
-                            </td>
-                            <td
-                              style={{
-                                padding: "1rem",
-                                border: "1px solid #ddd",
-                              }}
-                            >
-                              {user.email}
-                            </td>
-                            <td
-                              style={{
-                                padding: "1rem",
-                                border: "1px solid #ddd",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  padding: "0.25rem 0.5rem",
-                                  borderRadius: "4px",
-                                  color: "white",
-                                  backgroundColor:
-                                    user.subscription_status === "active"
-                                      ? "#28a745"
-                                      : "#dc3545",
-                                  fontSize: "0.8rem",
-                                }}
-                              >
-                                {user.subscription_status === "active"
-                                  ? "有効"
-                                  : "無効"}
-                              </span>
-                            </td>
-                            <td
-                              style={{
-                                padding: "1rem",
-                                border: "1px solid #ddd",
-                              }}
-                            >
-                              {user.is_admin ? "管理者" : "一般"}
-                            </td>
-                            <td
-                              style={{
-                                padding: "1rem",
-                                border: "1px solid #ddd",
-                              }}
-                            >
-                              {user.created_at ? formatDate(user.created_at) : 'N/A'}
-                            </td>
-                            <td
-                              style={{
-                                padding: "1rem",
-                                border: "1px solid #ddd",
-                              }}
-                            >
-                              {!user.is_admin && (
-                                <button
-                                  onClick={() => user.id && handleDeactivateUser(user.id)}
-                                  style={{
-                                    padding: "0.5rem 1rem",
-                                    backgroundColor: "#dc3545",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  無効化
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {selectedPost?.status === 'pending' && (
+            <>
+              <Button 
+                onClick={() => {
+                  handleApprovePost(selectedPost.id);
+                  setViewDialogOpen(false);
+                }}
+                color="success"
+                disabled={actionLoading}
+              >
+                Approve
+              </Button>
+              <Button 
+                onClick={() => {
+                  handleRejectPost(selectedPost.id);
+                  setViewDialogOpen(false);
+                }}
+                color="error"
+                disabled={actionLoading}
+              >
+                Reject
+              </Button>
+            </>
+          )}
+          <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 };
-
-export default AdminDashboard;

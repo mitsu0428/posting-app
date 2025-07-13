@@ -3,61 +3,69 @@ package handler
 import (
 	"context"
 	"net/http"
-	"posting-app/domain"
 	"strings"
+
+	"posting-app/domain"
+	"posting-app/infrastructure"
 )
 
 type contextKey string
 
-const UserContextKey contextKey = "user"
+const (
+	UserContextKey contextKey = "user"
+)
 
-func (h *Handler) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Authorization header required", http.StatusUnauthorized)
-			return
-		}
+func AuthMiddleware(jwtService *infrastructure.JWTService) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				http.Error(w, "Authorization header required", http.StatusUnauthorized)
+				return
+			}
 
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
-			return
-		}
+			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+			if tokenString == authHeader {
+				http.Error(w, "Bearer token required", http.StatusUnauthorized)
+				return
+			}
 
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		user, err := h.authUsecase.ValidateToken(token)
-		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			return
-		}
+			claims, err := jwtService.ValidateToken(tokenString)
+			if err != nil {
+				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				return
+			}
 
-		ctx := context.WithValue(r.Context(), UserContextKey, user)
-		next.ServeHTTP(w, r.WithContext(ctx))
+			user := &domain.User{
+				ID:    claims.UserID,
+				Email: claims.Email,
+				Role:  claims.Role,
+			}
+
+			ctx := context.WithValue(r.Context(), UserContextKey, user)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
 }
 
-func (h *Handler) AdminMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return h.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		user := r.Context().Value(UserContextKey).(*domain.User)
-		if !user.IsAdmin {
+func AdminMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, ok := r.Context().Value(UserContextKey).(*domain.User)
+		if !ok {
+			http.Error(w, "User not found in context", http.StatusUnauthorized)
+			return
+		}
+
+		if user.Role != string(domain.UserRoleAdmin) {
 			http.Error(w, "Admin access required", http.StatusForbidden)
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }
 
-func (h *Handler) CORSMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	}
+func GetUserFromContext(ctx context.Context) *domain.User {
+	user, _ := ctx.Value(UserContextKey).(*domain.User)
+	return user
 }

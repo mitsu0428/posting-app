@@ -3,99 +3,168 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
-	"github.com/gorilla/mux"
+	"posting-app/domain"
+	"posting-app/repository"
+	"posting-app/usecase"
 )
 
-func (h *Handler) AdminListPosts(w http.ResponseWriter, r *http.Request) {
-	status := r.URL.Query().Get("status")
-
-	posts, err := h.adminUsecase.ListAllPosts(status)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(posts)
+type AdminHandler struct {
+	authUsecase *usecase.AuthUsecase
+	postUsecase *usecase.PostUsecase
+	userRepo    *repository.UserRepository
 }
 
-func (h *Handler) ApprovePost(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
-	if err != nil {
-		http.Error(w, "Invalid post ID", http.StatusBadRequest)
-		return
+func NewAdminHandler(
+	authUsecase *usecase.AuthUsecase,
+	postUsecase *usecase.PostUsecase,
+	userRepo *repository.UserRepository,
+) *AdminHandler {
+	return &AdminHandler{
+		authUsecase: authUsecase,
+		postUsecase: postUsecase,
+		userRepo:    userRepo,
 	}
-
-	if err := h.adminUsecase.ApprovePost(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "Post approved successfully"}`))
 }
 
-func (h *Handler) RejectPost(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
+func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := validate.Struct(req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	user, token, err := h.authUsecase.AdminLogin(req.Email, req.Password)
 	if err != nil {
-		http.Error(w, "Invalid post ID", http.StatusBadRequest)
+		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	if err := h.adminUsecase.RejectPost(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	// Remove sensitive data
+	user.PasswordHash = ""
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "Post rejected successfully"}`))
+	writeJSON(w, http.StatusOK, LoginResponse{
+		User:        user,
+		AccessToken: token,
+	})
 }
 
-func (h *Handler) DeletePost(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
+func (h *AdminHandler) GetPosts(w http.ResponseWriter, r *http.Request) {
+	page := getQueryInt(r, "page", 1)
+	limit := getQueryInt(r, "limit", 20)
+
+	var status *domain.PostStatus
+	statusParam := r.URL.Query().Get("status")
+	if statusParam != "" {
+		switch statusParam {
+		case "pending":
+			s := domain.PostStatusPending
+			status = &s
+		case "approved":
+			s := domain.PostStatusApproved
+			status = &s
+		case "rejected":
+			s := domain.PostStatusRejected
+			status = &s
+		}
+	}
+
+	posts, total, err := h.postUsecase.GetPostsForAdmin(page, limit, status)
 	if err != nil {
-		http.Error(w, "Invalid post ID", http.StatusBadRequest)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	if err := h.adminUsecase.DeletePost(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	response := PaginatedResponse{
+		Data:  posts,
+		Total: total,
+		Page:  page,
+		Limit: limit,
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "Post deleted successfully"}`))
+	writeJSON(w, http.StatusOK, response)
 }
 
-func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.adminUsecase.ListUsers()
+func (h *AdminHandler) ApprovePost(w http.ResponseWriter, r *http.Request) {
+	postID, err := getIntParam(r, "id")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusBadRequest, "Invalid post ID")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+	err = h.postUsecase.ApprovePost(postID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Response{
+		Message: "Post approved successfully",
+	})
 }
 
-func (h *Handler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id, err := strconv.Atoi(vars["id"])
+func (h *AdminHandler) RejectPost(w http.ResponseWriter, r *http.Request) {
+	postID, err := getIntParam(r, "id")
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Invalid post ID")
 		return
 	}
 
-	if err := h.adminUsecase.DeactivateUser(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	err = h.postUsecase.RejectPost(postID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message": "User deactivated successfully"}`))
+	writeJSON(w, http.StatusOK, Response{
+		Message: "Post rejected successfully",
+	})
+}
+
+func (h *AdminHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
+	page := getQueryInt(r, "page", 1)
+	limit := getQueryInt(r, "limit", 20)
+
+	users, total, err := h.userRepo.GetAll(page, limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Remove sensitive data
+	for _, user := range users {
+		user.PasswordHash = ""
+	}
+
+	response := PaginatedResponse{
+		Data:  users,
+		Total: total,
+		Page:  page,
+		Limit: limit,
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *AdminHandler) BanUser(w http.ResponseWriter, r *http.Request) {
+	userID, err := getIntParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+
+	err = h.userRepo.Ban(userID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Response{
+		Message: "User banned successfully",
+	})
 }

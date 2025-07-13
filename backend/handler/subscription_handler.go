@@ -1,44 +1,83 @@
 package handler
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
-	"posting-app/domain"
+
+	"github.com/stripe/stripe-go/v76/webhook"
+	"posting-app/usecase"
 )
 
-func (h *Handler) CreateCheckoutSession(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(UserContextKey).(*domain.User)
-
-	sessionID, err := h.subscriptionUsecase.CreateCheckoutSession(user.ID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	response := map[string]string{
-		"session_id": sessionID,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+type SubscriptionHandler struct {
+	subscriptionUsecase *usecase.SubscriptionUsecase
+	webhookSecret       string
 }
 
-func (h *Handler) StripeWebhook(w http.ResponseWriter, r *http.Request) {
+func NewSubscriptionHandler(subscriptionUsecase *usecase.SubscriptionUsecase, webhookSecret string) *SubscriptionHandler {
+	return &SubscriptionHandler{
+		subscriptionUsecase: subscriptionUsecase,
+		webhookSecret:       webhookSecret,
+	}
+}
+
+func (h *SubscriptionHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	subscription, err := h.subscriptionUsecase.GetSubscriptionStatus(user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response := map[string]interface{}{
+		"status": subscription.Status,
+	}
+
+	if subscription.ID != 0 {
+		response["current_period_end"] = subscription.CurrentPeriodEnd
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *SubscriptionHandler) CreateCheckoutSession(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	url, err := h.subscriptionUsecase.CreateCheckoutSession(user.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"url": url,
+	})
+}
+
+func (h *SubscriptionHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	payload, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "Failed to read request body")
 		return
 	}
 
-	signature := r.Header.Get("Stripe-Signature")
-	if signature == "" {
-		http.Error(w, "Missing Stripe-Signature header", http.StatusBadRequest)
+	event, err := webhook.ConstructEvent(payload, r.Header.Get("Stripe-Signature"), h.webhookSecret)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid webhook signature")
 		return
 	}
 
-	if err := h.subscriptionUsecase.HandleWebhook(payload, signature); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	err = h.subscriptionUsecase.HandleWebhook(string(event.Type), event.Data.Object)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to process webhook")
 		return
 	}
 

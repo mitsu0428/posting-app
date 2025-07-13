@@ -1,75 +1,64 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-// import { css } from '../styled-system/css';
-// import { center } from '../styled-system/patterns';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { authApi } from '../utils/api';
 
-const Login: React.FC = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+export const Login: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
+    
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
 
     try {
-      await login(email, password);
-      navigate("/home");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "ログインに失敗しました");
+      setLoading(true);
+      setError('');
+      
+      const response = await authApi.login(email, password);
+      login(response.access_token, response.user);
+      navigate('/');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
     }
   };
 
-  const containerStyles =
-    "min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4";
-
-  const cardStyles = "max-w-md w-full bg-white shadow-lg rounded-xl p-8";
-
-  const titleStyles = "text-2xl font-bold text-center text-gray-900 mb-8";
-
-  const formStyles = "";
-
-  const fieldStyles = "mb-6";
-
-  const labelStyles = "block text-sm font-medium text-gray-700 mb-2";
-
-  const inputStyles =
-    "w-full px-3 py-2 border border-gray-300 rounded-md text-sm transition-all focus:outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-100";
-
-  const errorStyles =
-    "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4 text-sm";
-
-  const buttonStyles =
-    "w-full bg-blue-600 text-white py-3 px-4 rounded-md text-sm font-medium border-none cursor-pointer transition-all hover:bg-blue-700 hover:-translate-y-0.5 hover:shadow-lg disabled:bg-gray-300 disabled:cursor-not-allowed disabled:transform-none";
-
-  const linkContainerStyles = "text-center mt-6";
-
-  const linkItemStyles = "mb-4";
-
-  const linkStyles =
-    "text-blue-600 no-underline text-sm hover:text-blue-700 hover:underline";
-
   return (
-    <div className={containerStyles}>
-      <div className={cardStyles}>
-        <h1 className={titleStyles}>ログイン</h1>
-        <form
-          onSubmit={handleSubmit}
-          className={formStyles}
-        >
-          <div className={fieldStyles}>
-            <label
-              htmlFor="email"
-              className={labelStyles}
-            >
-              メールアドレス
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f9fafb' }}>
+      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', width: '100%', maxWidth: '400px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1f2937' }}>
+            Sign in to your account
+          </h2>
+          <p style={{ marginTop: '0.5rem', color: '#6b7280' }}>
+            Or{' '}
+            <Link to="/register" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
+              create a new account
+            </Link>
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {error && (
+            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              Email address
             </label>
             <input
               id="email"
@@ -77,16 +66,21 @@ const Login: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className={inputStyles}
-              placeholder="your-email@example.com"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Enter your email"
             />
           </div>
-          <div className={fieldStyles}>
-            <label
-              htmlFor="password"
-              className={labelStyles}
-            >
-              パスワード
+
+          <div>
+            <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              Password
             </label>
             <input
               id="password"
@@ -94,48 +88,52 @@ const Login: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className={inputStyles}
-              placeholder="パスワードを入力"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Enter your password"
             />
           </div>
-          {error && <div className={errorStyles}>{error}</div>}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Link to="/forgot-password" style={{ color: '#2563eb', textDecoration: 'none', fontSize: '0.875rem' }}>
+              Forgot your password?
+            </Link>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
-            className={buttonStyles}
+            style={{
+              width: '100%',
+              backgroundColor: loading ? '#9ca3af' : '#2563eb',
+              color: 'white',
+              padding: '0.75rem',
+              border: 'none',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
           >
-            {loading ? "ログイン中..." : "ログイン"}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-        <div className={linkContainerStyles}>
-          <div className={linkItemStyles}>
-            <Link
-              to="/register"
-              className={linkStyles}
-            >
-              新規登録はこちら
+
+        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+            Admin login?{' '}
+            <Link to="/admin-login-page" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
+              Sign in as admin
             </Link>
-          </div>
-          <div className={linkItemStyles}>
-            <Link
-              to="/forgot-password"
-              className={linkStyles}
-            >
-              パスワードを忘れた方
-            </Link>
-          </div>
-          <div className={linkItemStyles}>
-            <Link
-              to="/admin-login-page"
-              className={linkStyles}
-            >
-              管理者ログイン
-            </Link>
-          </div>
+          </p>
         </div>
       </div>
     </div>
   );
 };
-
-export default Login;

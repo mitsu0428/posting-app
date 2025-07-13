@@ -1,205 +1,341 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
-import Layout from "../components/Layout";
-import { postsAPI } from "../utils/api";
-import type { Post, Reply, CreateReplyRequest } from "../types";
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { postApi } from '../utils/api';
+import { Post, Reply } from '../types';
 
-const PostDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+export const PostDetail: React.FC = () => {
   const [post, setPost] = useState<Post | null>(null);
-  const [replies, setReplies] = useState<Reply[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [replyContent, setReplyContent] = useState("");
+  const [error, setError] = useState('');
+  const [replyContent, setReplyContent] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingReply, setSubmittingReply] = useState(false);
+  const [replyError, setReplyError] = useState('');
 
-  const loadPost = useCallback(async () => {
-    try {
-      const postData = await postsAPI.getPost(Number(id));
-      setPost(postData);
-    } catch (err) {
-      setError("投稿の読み込みに失敗しました");
-    }
-  }, [id]);
-
-  const loadReplies = useCallback(async () => {
-    try {
-      const repliesData = await postsAPI.getReplies(Number(id));
-      setReplies(repliesData);
-    } catch (err) {
-      console.error("返信の読み込みに失敗しました");
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (id) {
-      loadPost();
-      loadReplies();
+      fetchPost();
     }
-  }, [id, loadPost, loadReplies]);
+  }, [id]);
 
-  const handleSubmitReply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!replyContent.trim()) return;
-
-    setSubmitting(true);
+  const fetchPost = async () => {
     try {
-      const replyData: CreateReplyRequest = {
-        content: replyContent,
-        is_anonymous: isAnonymous,
-      };
-
-      await postsAPI.createReply(Number(id), replyData);
-      setReplyContent("");
-      setIsAnonymous(false);
-      await loadReplies();
-    } catch (err) {
-      alert("返信の投稿に失敗しました");
+      setLoading(true);
+      const response = await postApi.getPost(Number(id));
+      setPost(response);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to fetch post');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("ja-JP", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const handleReplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!replyContent.trim()) {
+      setReplyError('Reply content is required');
+      return;
+    }
+
+    if (replyContent.length > 2000) {
+      setReplyError('Reply must be less than 2000 characters');
+      return;
+    }
+
+    if (user?.subscription_status !== 'active') {
+      setReplyError('Active subscription required to create replies');
+      return;
+    }
+
+    try {
+      setSubmittingReply(true);
+      setReplyError('');
+
+      await postApi.createReply(Number(id), replyContent.trim(), isAnonymous);
+      setReplyContent('');
+      setIsAnonymous(false);
+      
+      // Refresh post to show new reply
+      await fetchPost();
+    } catch (err: any) {
+      setReplyError(err.response?.data?.message || 'Failed to create reply');
+    } finally {
+      setSubmittingReply(false);
+    }
   };
 
-  // Basic styles
-  const loadingStyles = "text-center py-12 text-gray-600 text-lg";
-  const errorStyles = "text-red-600";
-  const backLinkStyles = "text-blue-600 no-underline mb-4 inline-block";
-  const postCardStyles = "border border-gray-300 rounded-lg p-8 mt-4 bg-white";
-  const postTitleStyles = "text-3xl font-bold mb-4";
-  const postMetaStyles = "text-gray-600 mb-4";
-  const postImageStyles = "max-w-full h-auto mb-4";
-  const postContentStyles = "leading-relaxed whitespace-pre-wrap";
-  const replyFormContainerStyles = "mt-8";
-  const replyFormStyles = "border border-gray-300 rounded-lg p-4 bg-gray-50";
-  const textareaStyles = "w-full p-2 border border-gray-300 rounded border-solid resize-vertical";
-  const checkboxContainerStyles = "mb-4";
-  const checkboxStyles = "mr-2";
-  const submitButtonStyles = "py-2 px-4 bg-blue-600 text-white border-none rounded cursor-pointer disabled:bg-gray-400 disabled:cursor-not-allowed";
-  const repliesContainerStyles = "mt-8";
-  const repliesTitleStyles = "text-2xl font-semibold mb-4";
-  const replyCardStyles = "border border-gray-300 rounded-lg p-4 mb-4 bg-white";
-  const replyHeaderStyles = "flex justify-between items-center mb-2";
-  const replyAuthorStyles = "font-bold text-gray-600";
-  const replyDateStyles = "text-gray-500 text-sm";
-  const replyContentStyles = "leading-relaxed whitespace-pre-wrap";
+  const canEdit = user && post && user.id === post.author.id && post.status === 'pending';
+  const canDelete = user && post && user.id === post.author.id;
+
+  const handleEdit = () => {
+    navigate(`/posts/${id}/edit`);
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this post?')) {
+      return;
+    }
+
+    try {
+      await postApi.deletePost(Number(id));
+      navigate('/my-page');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to delete post');
+    }
+  };
 
   if (loading) {
     return (
-      <Layout>
-        <div className={loadingStyles}>読み込み中...</div>
-      </Layout>
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div>Loading post...</div>
+      </div>
     );
   }
 
-  if (error || !post) {
+  if (error) {
     return (
-      <Layout>
-        <div className={errorStyles}>{error || "投稿が見つかりません"}</div>
-        <Link to="/home" className={backLinkStyles}>ホームに戻る</Link>
-      </Layout>
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div style={{ color: '#dc2626', marginBottom: '1rem' }}>
+          Error: {error}
+        </div>
+        <Link to="/" style={{ color: '#2563eb', textDecoration: 'none' }}>
+          ← Back to home
+        </Link>
+      </div>
+    );
+  }
+
+  if (!post) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div style={{ marginBottom: '1rem' }}>Post not found</div>
+        <Link to="/" style={{ color: '#2563eb', textDecoration: 'none' }}>
+          ← Back to home
+        </Link>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div>
-        <Link to="/home" className={backLinkStyles}>
-          ← 投稿一覧に戻る
+    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ marginBottom: '1rem' }}>
+        <Link to="/" style={{ color: '#2563eb', textDecoration: 'none' }}>
+          ← Back to posts
         </Link>
+      </div>
 
-        <div className={postCardStyles}>
-          <h1 className={postTitleStyles}>{post.title}</h1>
-          <p className={postMetaStyles}>
-            投稿日: {post.created_at ? formatDate(post.created_at) : 'N/A'}
-          </p>
-          {post.thumbnail_url && (
-            <img
-              src={post.thumbnail_url}
-              alt="サムネイル"
-              className={postImageStyles}
-            />
-          )}
-          <div className={postContentStyles}>
-            {post.content}
+      <article style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '2rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1.5rem' }}>
+          <div>
+            <h1 style={{ fontSize: '1.875rem', fontWeight: '700', marginBottom: '1rem' }}>
+              {post.title}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', color: '#6b7280', fontSize: '0.875rem' }}>
+              <span>By {post.author.display_name}</span>
+              <span>•</span>
+              <span>{new Date(post.created_at).toLocaleDateString()}</span>
+              <span>•</span>
+              <span style={{ 
+                color: post.status === 'approved' ? '#059669' : post.status === 'pending' ? '#d97706' : '#dc2626',
+                fontWeight: '500'
+              }}>
+                {post.status}
+              </span>
+            </div>
           </div>
+          
+          {(canEdit || canDelete) && (
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {canEdit && (
+                <button
+                  onClick={handleEdit}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#2563eb',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Edit
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  onClick={handleDelete}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#dc2626',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className={replyFormContainerStyles}>
-          <h2>返信を投稿</h2>
-          <form onSubmit={handleSubmitReply} className={replyFormStyles}>
-            <div className="mb-4">
-              <textarea
-                value={replyContent}
-                onChange={(e) => setReplyContent(e.target.value)}
-                placeholder="返信内容を入力してください"
-                rows={4}
-                className={textareaStyles}
-                required
-              />
+        {post.thumbnail_url && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <img
+              src={post.thumbnail_url}
+              alt={post.title}
+              style={{
+                width: '100%',
+                maxHeight: '400px',
+                objectFit: 'cover',
+                borderRadius: '0.375rem',
+              }}
+            />
+          </div>
+        )}
+
+        <div style={{ 
+          lineHeight: '1.7', 
+          fontSize: '1rem',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word'
+        }}>
+          {post.content}
+        </div>
+      </article>
+
+      {/* Replies Section */}
+      <div style={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '2rem' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1.5rem' }}>
+          Replies ({post.replies?.length || 0})
+        </h2>
+
+        {/* Reply Form */}
+        {user && user.subscription_status === 'active' && (
+          <form onSubmit={handleReplySubmit} style={{ marginBottom: '2rem', padding: '1.5rem', backgroundColor: '#f9fafb', borderRadius: '0.5rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: '500', marginBottom: '1rem' }}>
+              Add a reply
+            </h3>
+            
+            {replyError && (
+              <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+                {replyError}
+              </div>
+            )}
+
+            <textarea
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              placeholder="Write your reply..."
+              maxLength={2000}
+              rows={4}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                fontFamily: 'inherit',
+                resize: 'vertical',
+                boxSizing: 'border-box',
+                marginBottom: '1rem',
+              }}
+            />
+            
+            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '1rem' }}>
+              {replyContent.length}/2000 characters
             </div>
-            <div className={checkboxContainerStyles}>
-              <label>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
                 <input
                   type="checkbox"
                   checked={isAnonymous}
                   onChange={(e) => setIsAnonymous(e.target.checked)}
-                  className={checkboxStyles}
                 />
-                匿名で投稿する
+                Post anonymously
               </label>
-            </div>
-            <button
-              type="submit"
-              disabled={submitting || !replyContent.trim()}
-              className={submitButtonStyles}
-            >
-              {submitting ? "投稿中..." : "返信を投稿"}
-            </button>
-          </form>
-        </div>
 
-        <div className={repliesContainerStyles}>
-          <h2 className={repliesTitleStyles}>返信一覧 ({replies.length}件)</h2>
-          {replies.length === 0 ? (
-            <p>まだ返信がありません。</p>
-          ) : (
-            <div>
-              {replies.map((reply) => (
-                <div key={reply.id} className={replyCardStyles}>
-                  <div className={replyHeaderStyles}>
-                    <span className={replyAuthorStyles}>
-                      {reply.is_anonymous
-                        ? "匿名ユーザー"
-                        : `ユーザー#${reply.user_id}`}
-                    </span>
-                    <span className={replyDateStyles}>
-                      {reply.created_at ? formatDate(reply.created_at) : 'N/A'}
-                    </span>
-                  </div>
-                  <div className={replyContentStyles}>
-                    {reply.content}
+              <button
+                type="submit"
+                disabled={submittingReply || !replyContent.trim()}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: (submittingReply || !replyContent.trim()) ? '#9ca3af' : '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  cursor: (submittingReply || !replyContent.trim()) ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {submittingReply ? 'Posting...' : 'Post Reply'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {user && user.subscription_status !== 'active' && (
+          <div style={{ backgroundColor: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '0.5rem', padding: '1rem', marginBottom: '2rem' }}>
+            <p style={{ color: '#92400e', fontSize: '0.875rem' }}>
+              Active subscription required to post replies.{' '}
+              <Link to="/subscription" style={{ color: '#92400e', fontWeight: '500' }}>
+                Manage subscription
+              </Link>
+            </p>
+          </div>
+        )}
+
+        {/* Replies List */}
+        {post.replies && post.replies.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {post.replies.map((reply: Reply) => (
+              <div
+                key={reply.id}
+                style={{
+                  padding: '1rem',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '0.375rem',
+                  backgroundColor: '#fafafa',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
+                  <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                    {reply.is_anonymous ? (
+                      <span style={{ fontStyle: 'italic' }}>Anonymous</span>
+                    ) : (
+                      <span>{reply.author?.display_name || 'Unknown User'}</span>
+                    )}
+                    <span style={{ margin: '0 0.5rem' }}>•</span>
+                    <span>{new Date(reply.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <div style={{ 
+                  lineHeight: '1.6',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}>
+                  {reply.content}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>
+            No replies yet. Be the first to reply!
+          </div>
+        )}
       </div>
-    </Layout>
+    </div>
   );
 };
-
-export default PostDetail;

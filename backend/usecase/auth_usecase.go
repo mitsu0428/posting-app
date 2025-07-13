@@ -3,161 +3,194 @@ package usecase
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"posting-app/domain"
-	"posting-app/infrastructure"
+	"log/slog"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	"posting-app/domain"
+	"posting-app/infrastructure"
+	"posting-app/repository"
 )
 
-type authUsecase struct {
-	userRepo        domain.UserRepository
-	passwordRepo    domain.PasswordResetRepository
-	jwtManager      *infrastructure.JWTManager
+type AuthUsecase struct {
+	userRepo          *repository.UserRepository
+	passwordResetRepo *repository.PasswordResetRepository
+	jwtService        *infrastructure.JWTService
 }
 
-func NewAuthUsecase(userRepo domain.UserRepository, passwordRepo domain.PasswordResetRepository, jwtManager *infrastructure.JWTManager) domain.AuthUsecase {
-	return &authUsecase{
-		userRepo:        userRepo,
-		passwordRepo:    passwordRepo,
-		jwtManager:      jwtManager,
+func NewAuthUsecase(
+	userRepo *repository.UserRepository,
+	passwordResetRepo *repository.PasswordResetRepository,
+	jwtService *infrastructure.JWTService,
+) *AuthUsecase {
+	return &AuthUsecase{
+		userRepo:          userRepo,
+		passwordResetRepo: passwordResetRepo,
+		jwtService:        jwtService,
 	}
 }
 
-func (u *authUsecase) Register(username, email, password string) (*domain.User, error) {
-	existing, _ := u.userRepo.GetByEmail(email)
-	if existing != nil {
-		return nil, fmt.Errorf("user with email %s already exists", email)
+func (u *AuthUsecase) Register(email, password, displayName string) (*domain.User, error) {
+	// Check if user already exists
+	_, err := u.userRepo.GetByEmail(email)
+	if err == nil {
+		return nil, errors.New("user already exists")
 	}
 
+	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	user := &domain.User{
-		Username:           username,
 		Email:              email,
 		PasswordHash:       string(hashedPassword),
-		SubscriptionStatus: "inactive",
-		IsAdmin:            false,
+		DisplayName:        displayName,
+		Role:               string(domain.UserRoleUser),
+		SubscriptionStatus: domain.UserSubscriptionStatusInactive,
 		IsActive:           true,
+		EmailVerified:      true, // For simplicity, we'll skip email verification
 	}
 
-	if err := u.userRepo.Create(user); err != nil {
+	err = u.userRepo.Create(user)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	slog.Info("User registered successfully", "email", email)
 	return user, nil
 }
 
-func (u *authUsecase) Login(email, password string) (string, *domain.User, error) {
+func (u *AuthUsecase) Login(email, password string) (*domain.User, string, error) {
 	user, err := u.userRepo.GetByEmail(email)
 	if err != nil {
-		return "", nil, fmt.Errorf("invalid credentials")
+		return nil, "", errors.New("invalid credentials")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return "", nil, fmt.Errorf("invalid credentials")
+	if !user.IsActive {
+		return nil, "", errors.New("account is deactivated")
 	}
 
-	if user.SubscriptionStatus != "active" {
-		return "", nil, fmt.Errorf("subscription required")
-	}
-
-	token, err := u.jwtManager.GenerateToken(user)
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate token: %w", err)
+		return nil, "", errors.New("invalid credentials")
 	}
 
-	return token, user, nil
+	token, err := u.jwtService.GenerateAccessToken(user)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	slog.Info("User logged in successfully", "email", email)
+	return user, token, nil
 }
 
-func (u *authUsecase) AdminLogin(email, password string) (string, *domain.User, error) {
+func (u *AuthUsecase) AdminLogin(email, password string) (*domain.User, string, error) {
 	user, err := u.userRepo.GetByEmail(email)
 	if err != nil {
-		return "", nil, fmt.Errorf("invalid credentials")
+		return nil, "", errors.New("invalid credentials")
 	}
 
-	if !user.IsAdmin {
-		return "", nil, fmt.Errorf("access denied")
+	if !user.IsActive {
+		return nil, "", errors.New("account is deactivated")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return "", nil, fmt.Errorf("invalid credentials")
+	if user.Role != string(domain.UserRoleAdmin) {
+		return nil, "", errors.New("admin access required")
 	}
 
-	token, err := u.jwtManager.GenerateToken(user)
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate token: %w", err)
+		return nil, "", errors.New("invalid credentials")
 	}
 
-	return token, user, nil
+	token, err := u.jwtService.GenerateAccessToken(user)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	slog.Info("Admin logged in successfully", "email", email)
+	return user, token, nil
 }
 
-func (u *authUsecase) ValidateToken(token string) (*domain.User, error) {
-	claims, err := u.jwtManager.ValidateToken(token)
-	if err != nil {
-		return nil, fmt.Errorf("invalid token: %w", err)
-	}
-
-	user, err := u.userRepo.GetByID(claims.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
-	}
-
-	return user, nil
-}
-
-func (u *authUsecase) Logout(token string) error {
-	return nil
-}
-
-func (u *authUsecase) ForgotPassword(email string) error {
+func (u *AuthUsecase) ForgotPassword(email string) error {
 	user, err := u.userRepo.GetByEmail(email)
 	if err != nil {
-		return fmt.Errorf("user not found")
+		// For security reasons, we don't reveal if the email exists
+		slog.Info("Password reset requested for non-existent email", "email", email)
+		return nil
 	}
 
-	// 既存のパスワードリセットトークンを削除
-	u.passwordRepo.DeleteByUserID(user.ID)
+	if !user.IsActive {
+		slog.Info("Password reset requested for inactive user", "email", email)
+		return nil
+	}
 
-	// 新しいトークンを生成
-	token, err := u.generateResetToken()
+	// Generate reset token
+	tokenBytes := make([]byte, 32)
+	_, err = rand.Read(tokenBytes)
 	if err != nil {
 		return fmt.Errorf("failed to generate reset token: %w", err)
 	}
+	token := hex.EncodeToString(tokenBytes)
 
-	// 24時間の有効期限
-	expiresAt := time.Now().Add(24 * time.Hour)
-
-	reset := &domain.PasswordReset{
+	passwordReset := &domain.PasswordReset{
 		UserID:    user.ID,
 		Token:     token,
-		ExpiresAt: expiresAt,
+		ExpiresAt: time.Now().Add(1 * time.Hour), // 1 hour expiry
 	}
 
-	if err := u.passwordRepo.Create(reset); err != nil {
+	err = u.passwordResetRepo.Create(passwordReset)
+	if err != nil {
 		return fmt.Errorf("failed to create password reset: %w", err)
 	}
 
-	// 実際のアプリケーションでは、ここでメール送信ロジックを実装
-	// 今回はログに出力
-	fmt.Printf("Password reset token for %s: %s\n", email, token)
+	// TODO: Send email with reset token
+	slog.Info("Password reset token generated", "email", email, "token", token)
 
 	return nil
 }
 
-func (u *authUsecase) ResetPassword(token, newPassword string) error {
-	reset, err := u.passwordRepo.GetByToken(token)
+func (u *AuthUsecase) ResetPassword(token, newPassword string) error {
+	passwordReset, err := u.passwordResetRepo.GetByToken(token)
 	if err != nil {
-		return fmt.Errorf("invalid or expired token")
+		return errors.New("invalid or expired reset token")
 	}
 
-	user, err := u.userRepo.GetByID(reset.UserID)
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return fmt.Errorf("user not found")
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Update user password
+	err = u.userRepo.UpdatePassword(passwordReset.UserID, string(hashedPassword))
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	// Mark reset token as used
+	err = u.passwordResetRepo.MarkAsUsed(passwordReset.ID)
+	if err != nil {
+		return fmt.Errorf("failed to mark reset token as used: %w", err)
+	}
+
+	slog.Info("Password reset successfully", "user_id", passwordReset.UserID)
+	return nil
+}
+
+func (u *AuthUsecase) ChangePassword(userID int, currentPassword, newPassword string) error {
+	user, err := u.userRepo.GetByID(userID)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword))
+	if err != nil {
+		return errors.New("current password is incorrect")
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
@@ -165,21 +198,11 @@ func (u *authUsecase) ResetPassword(token, newPassword string) error {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	user.PasswordHash = string(hashedPassword)
-	if err := u.userRepo.Update(user); err != nil {
+	err = u.userRepo.UpdatePassword(userID, string(hashedPassword))
+	if err != nil {
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 
-	// パスワードリセットトークンを削除
-	u.passwordRepo.DeleteByUserID(user.ID)
-
+	slog.Info("Password changed successfully", "user_id", userID)
 	return nil
-}
-
-func (u *authUsecase) generateResetToken() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
 }

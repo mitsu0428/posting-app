@@ -1,62 +1,61 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-// import { css } from '../../styled-system/css';
-// import { center } from '../../styled-system/patterns';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { authApi } from '../utils/api';
 
-const AdminLogin: React.FC = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+export const AdminLogin: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { adminLogin } = useAuth();
+  const [error, setError] = useState('');
+
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
+    
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
 
     try {
-      await adminLogin(email, password);
-      navigate("/admin");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "管理者ログインに失敗しました"
-      );
+      setLoading(true);
+      setError('');
+      
+      const response = await authApi.adminLogin(email, password);
+      login(response.access_token, response.user);
+      navigate('/admin');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Admin login failed');
     } finally {
       setLoading(false);
     }
   };
 
-  // Temporary basic styles
-  const containerStyles =
-    "min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4";
-  const cardStyles =
-    "max-w-md w-full bg-white shadow-xl rounded-xl p-8 border-2 border-orange-200";
-  const titleStyles = "text-2xl font-bold text-center text-orange-700 mb-8";
-  const fieldStyles = "mb-6";
-  const labelStyles = "block text-sm font-semibold text-gray-700 mb-2";
-  const inputStyles =
-    "w-full px-3 py-2 border border-gray-300 rounded-md text-sm";
-  const errorStyles =
-    "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4 text-sm";
-  const buttonStyles =
-    "w-full bg-orange-600 text-white py-3 px-4 rounded-md text-sm font-semibold border-none cursor-pointer";
-  const linkContainerStyles = "text-center mt-6";
-  const linkStyles = "text-orange-600 no-underline text-sm";
-
   return (
-    <div className={containerStyles}>
-      <div className={cardStyles}>
-        <h1 className={titleStyles}>管理者ログイン</h1>
-        <form onSubmit={handleSubmit}>
-          <div className={fieldStyles}>
-            <label
-              htmlFor="email"
-              className={labelStyles}
-            >
-              メールアドレス
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f9fafb' }}>
+      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', width: '100%', maxWidth: '400px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1f2937' }}>
+            Admin Login
+          </h2>
+          <p style={{ marginTop: '0.5rem', color: '#6b7280' }}>
+            Sign in with your admin credentials
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {error && (
+            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              Admin Email
             </label>
             <input
               id="email"
@@ -64,16 +63,21 @@ const AdminLogin: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className={inputStyles}
-              placeholder="admin@example.com"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Enter admin email"
             />
           </div>
-          <div className={fieldStyles}>
-            <label
-              htmlFor="password"
-              className={labelStyles}
-            >
-              パスワード
+
+          <div>
+            <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
+              Password
             </label>
             <input
               id="password"
@@ -81,30 +85,52 @@ const AdminLogin: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className={inputStyles}
-              placeholder="管理者パスワードを入力"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Enter admin password"
             />
           </div>
-          {error && <div className={errorStyles}>{error}</div>}
+
           <button
             type="submit"
             disabled={loading}
-            className={buttonStyles}
+            style={{
+              width: '100%',
+              backgroundColor: loading ? '#9ca3af' : '#dc2626',
+              color: 'white',
+              padding: '0.75rem',
+              border: 'none',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
           >
-            {loading ? "ログイン中..." : "管理者ログイン"}
+            {loading ? 'Signing in...' : 'Sign in as Admin'}
           </button>
         </form>
-        <div className={linkContainerStyles}>
-          <Link
-            to="/login"
-            className={linkStyles}
-          >
-            一般ユーザーログインはこちら
-          </Link>
+
+        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+            Regular user?{' '}
+            <Link to="/login" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
+              Sign in here
+            </Link>
+          </p>
+        </div>
+
+        <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '0.375rem' }}>
+          <p style={{ fontSize: '0.75rem', color: '#92400e', textAlign: 'center' }}>
+            Demo Admin: admin@example.com / admin123
+          </p>
         </div>
       </div>
     </div>
   );
 };
-
-export default AdminLogin;

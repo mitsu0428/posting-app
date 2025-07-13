@@ -1,118 +1,209 @@
-import axios from 'axios';
-import type { User, Post, Reply, CreatePostRequest, CreateReplyRequest } from '../types';
+import { customInstance } from './api-mutator';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+export interface LoginResponse {
+  user: {
+    id: number;
+    email: string;
+    display_name: string;
+    bio?: string;
+    role: 'user' | 'admin';
+    subscription_status: 'active' | 'inactive' | 'past_due' | 'canceled';
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+  };
+  access_token: string;
+}
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-export const authAPI = {
-  register: async (username: string, email: string, password: string): Promise<User> => {
-    const response = await api.post('/auth/register', { username, email, password });
+export const authApi = {
+  login: async (email: string, password: string): Promise<LoginResponse> => {
+    const response = await customInstance.post('/auth/login', {
+      email,
+      password,
+    });
     return response.data;
   },
 
-  login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
-    const response = await api.post('/auth/login', { email, password });
+  register: async (
+    email: string,
+    password: string,
+    display_name: string
+  ): Promise<any> => {
+    const response = await customInstance.post('/auth/register', {
+      email,
+      password,
+      display_name,
+    });
     return response.data;
   },
 
-  adminLogin: async (email: string, password: string): Promise<{ token: string; user: User }> => {
-    const response = await api.post('/admin/login', { email, password });
+  adminLogin: async (email: string, password: string): Promise<LoginResponse> => {
+    const response = await customInstance.post('/admin/login', {
+      email,
+      password,
+    });
     return response.data;
   },
 
   logout: async (): Promise<void> => {
-    await api.post('/auth/logout');
+    await customInstance.post('/auth/logout');
   },
 
-  forgotPassword: async (email: string): Promise<{ message: string }> => {
-    const response = await api.post('/auth/forgot-password', { email });
+  forgotPassword: async (email: string): Promise<any> => {
+    const response = await customInstance.post('/auth/forgot-password', {
+      email,
+    });
     return response.data;
   },
 
-  resetPassword: async (token: string, newPassword: string): Promise<{ message: string }> => {
-    const response = await api.post('/auth/reset-password', { token, new_password: newPassword });
-    return response.data;
-  },
-};
-
-export const postsAPI = {
-  getPosts: async (page: number = 1, limit: number = 20): Promise<{ posts: Post[]; total: number }> => {
-    const response = await api.get(`/posts?page=${page}&limit=${limit}`);
+  resetPassword: async (token: string, new_password: string): Promise<any> => {
+    const response = await customInstance.post('/auth/reset-password', {
+      token,
+      new_password,
+    });
     return response.data;
   },
 
-  getPost: async (id: number): Promise<Post> => {
-    const response = await api.get(`/posts/${id}`);
-    return response.data;
-  },
-
-  createPost: async (postData: CreatePostRequest): Promise<Post> => {
-    const response = await api.post('/posts', postData);
-    return response.data;
-  },
-
-  getUserPosts: async (): Promise<Post[]> => {
-    const response = await api.get('/me/posts');
-    return response.data;
-  },
-
-  getReplies: async (postId: number): Promise<Reply[]> => {
-    const response = await api.get(`/posts/${postId}/replies`);
-    return response.data;
-  },
-
-  createReply: async (postId: number, replyData: CreateReplyRequest): Promise<Reply> => {
-    const response = await api.post(`/posts/${postId}/replies`, replyData);
+  changePassword: async (
+    current_password: string,
+    new_password: string
+  ): Promise<any> => {
+    const response = await customInstance.post('/user/change-password', {
+      current_password,
+      new_password,
+    });
     return response.data;
   },
 };
 
-export const adminAPI = {
-  getPosts: async (status?: string): Promise<Post[]> => {
-    const url = status ? `/admin/posts?status=${status}` : '/admin/posts';
-    const response = await api.get(url);
+export const userApi = {
+  getProfile: async (): Promise<any> => {
+    const response = await customInstance.get('/user/profile');
     return response.data;
   },
 
-  approvePost: async (id: number): Promise<void> => {
-    await api.post(`/admin/posts/${id}/approve`);
+  updateProfile: async (
+    display_name: string,
+    bio?: string
+  ): Promise<any> => {
+    const response = await customInstance.put('/user/profile', {
+      display_name,
+      bio,
+    });
+    return response.data;
   },
 
-  rejectPost: async (id: number): Promise<void> => {
-    await api.post(`/admin/posts/${id}/reject`);
+  deactivateAccount: async (): Promise<any> => {
+    const response = await customInstance.post('/user/deactivate');
+    return response.data;
+  },
+
+  getUserPosts: async (page = 1, limit = 20): Promise<any> => {
+    const response = await customInstance.get(
+      `/user/posts?page=${page}&limit=${limit}`
+    );
+    return response.data;
+  },
+};
+
+export const postApi = {
+  getPosts: async (page = 1, limit = 20): Promise<any> => {
+    const response = await customInstance.get(
+      `/posts?page=${page}&limit=${limit}`
+    );
+    return response.data;
+  },
+
+  getPost: async (id: number): Promise<any> => {
+    const response = await customInstance.get(`/posts/${id}`);
+    return response.data;
+  },
+
+  createPost: async (formData: FormData): Promise<any> => {
+    const response = await customInstance.post('/posts', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  updatePost: async (id: number, formData: FormData): Promise<any> => {
+    const response = await customInstance.put(`/posts/${id}`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
   },
 
   deletePost: async (id: number): Promise<void> => {
-    await api.delete(`/admin/posts/${id}`);
+    await customInstance.delete(`/posts/${id}`);
   },
 
-  getUsers: async (): Promise<User[]> => {
-    const response = await api.get('/admin/users');
+  createReply: async (
+    postId: number,
+    content: string,
+    isAnonymous: boolean
+  ): Promise<any> => {
+    const response = await customInstance.post(`/posts/${postId}/replies`, {
+      content,
+      is_anonymous: isAnonymous,
+    });
     return response.data;
-  },
-
-  deactivateUser: async (id: number): Promise<void> => {
-    await api.post(`/admin/users/${id}/deactivate`);
   },
 };
 
-export const subscriptionAPI = {
-  createCheckoutSession: async (): Promise<{ session_id: string }> => {
-    const response = await api.post('/subscription/create-checkout-session');
+export const subscriptionApi = {
+  getStatus: async (): Promise<any> => {
+    const response = await customInstance.get('/subscription/status');
+    return response.data;
+  },
+
+  createCheckoutSession: async (): Promise<{ url: string }> => {
+    const response = await customInstance.post(
+      '/subscription/create-checkout-session'
+    );
+    return response.data;
+  },
+};
+
+export const adminApi = {
+  getPosts: async (
+    page = 1,
+    limit = 20,
+    status?: string
+  ): Promise<any> => {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+    });
+    if (status) {
+      params.append('status', status);
+    }
+    const response = await customInstance.get(`/admin/posts?${params}`);
+    return response.data;
+  },
+
+  approvePost: async (id: number): Promise<any> => {
+    const response = await customInstance.post(`/admin/posts/${id}/approve`);
+    return response.data;
+  },
+
+  rejectPost: async (id: number): Promise<any> => {
+    const response = await customInstance.post(`/admin/posts/${id}/reject`);
+    return response.data;
+  },
+
+  getUsers: async (page = 1, limit = 20): Promise<any> => {
+    const response = await customInstance.get(
+      `/admin/users?page=${page}&limit=${limit}`
+    );
+    return response.data;
+  },
+
+  banUser: async (id: number): Promise<any> => {
+    const response = await customInstance.post(`/admin/users/${id}/ban`);
     return response.data;
   },
 };

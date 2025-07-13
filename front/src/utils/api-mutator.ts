@@ -1,69 +1,50 @@
-import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 
-// APIのベースURL設定
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
-
-// Axiosインスタンスを作成
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+export const customInstance = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8080',
+  withCredentials: true,
 });
 
-// リクエストインターセプター（JWTトークン自動付与）
-apiClient.interceptors.request.use(
+// Request interceptor to add auth token
+customInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token && config.headers) {
+    const token = localStorage.getItem('access_token');
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
-// レスポンスインターセプター（エラーハンドリング）
-apiClient.interceptors.response.use(
+// Response interceptor to handle auth errors
+customInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // 認証エラーの場合、トークンをクリアしてログインページにリダイレクト
-      localStorage.removeItem('token');
+      localStorage.removeItem('access_token');
       localStorage.removeItem('user');
       window.location.href = '/login';
-    } else if (error.response?.status === 403) {
-      console.error('Access denied:', error.response.data);
-    } else if (error.response?.status >= 500) {
-      console.error('Server error:', error.response.data);
     }
     return Promise.reject(error);
   }
 );
 
-// Orval用のmutator関数
-export const apiMutator = <T = any>(
-  config: AxiosRequestConfig,
-  options?: AxiosRequestConfig
-): Promise<T> => {
+const apiMutator = <T = any>(config: AxiosRequestConfig): Promise<T> => {
   const source = axios.CancelToken.source();
-  const promise = apiClient({
+  const promise = customInstance({
     ...config,
-    ...options,
     cancelToken: source.token,
-  }).then(({ data }: AxiosResponse<T>) => data);
+  }).then(({ data }) => data);
 
   // @ts-ignore
   promise.cancel = () => {
-    source.cancel('Query was cancelled');
+    source.cancel('Query was cancelled by React Query');
   };
 
   return promise;
 };
 
-// デフォルトエクスポート
-export default apiClient;
+export default apiMutator;

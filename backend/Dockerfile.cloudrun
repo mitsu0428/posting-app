@@ -1,43 +1,40 @@
-# Google Cloud Run用 Dockerfile (Backend)
-FROM golang:1.21.6-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
-# 必要なパッケージをインストール
-RUN apk add --no-cache git
-
-# ワーキングディレクトリを設定
 WORKDIR /app
 
-# Go modulesをコピーして依存関係をダウンロード
+# Install dependencies
 COPY go.mod go.sum ./
 RUN go mod download
 
-# ソースコードをコピー
+# Copy source code
 COPY . .
 
-# バイナリをビルド
+# Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
-# 本番用イメージ
 FROM alpine:latest
 
-# セキュリティ更新とCA証明書を追加
+# Install ca-certificates for HTTPS requests
 RUN apk --no-cache add ca-certificates
 
-# ワーキングディレクトリを作成
-WORKDIR /root/
+# Create non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
 
-# バイナリをコピー
+WORKDIR /home/appuser
+
+# Copy the binary from builder
 COPY --from=builder /app/main .
 
-# マイグレーションファイルをコピー
-COPY --from=builder /app/migrations ./migrations
+# Create uploads directory and set permissions
+RUN mkdir -p uploads && \
+    chown -R appuser:appgroup /home/appuser
 
-# ポートを公開
+# Switch to non-root user
+USER appuser
+
+# Expose port
 EXPOSE 8080
 
-# ヘルスチェック
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
-
-# 実行
+# Run the binary
 CMD ["./main"]
