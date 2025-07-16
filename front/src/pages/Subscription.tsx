@@ -9,7 +9,7 @@ export const Subscription: React.FC = () => {
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const { user: _user } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchSubscriptionStatus();

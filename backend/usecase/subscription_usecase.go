@@ -40,15 +40,25 @@ func NewSubscriptionUsecase(
 }
 
 func (u *SubscriptionUsecase) GetSubscriptionStatus(userID int) (*domain.Subscription, error) {
+	// First get the user to check the subscription status in the users table
+	user, err := u.userRepo.GetByID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Try to get the subscription details from the subscriptions table
 	sub, err := u.subscriptionRepo.GetByUserID(userID)
 	if err != nil {
-		// User has no subscription
+		// User has no subscription record, return status from user record
 		return &domain.Subscription{
 			UserID: userID,
-			Status: domain.UserSubscriptionStatusInactive,
+			Status: user.SubscriptionStatus,
 		}, nil
 	}
 
+	// If we have a subscription record, use that status but ensure it matches the user's status
+	// The user's subscription_status should be the authoritative source
+	sub.Status = user.SubscriptionStatus
 	return sub, nil
 }
 

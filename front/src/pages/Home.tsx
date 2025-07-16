@@ -125,7 +125,7 @@ export const Home: React.FC = () => {
         </Link>
       </div>
 
-      {posts.length === 0 ? (
+      {posts && posts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#f9fafb', borderRadius: '0.5rem' }}>
           <h3>No posts yet</h3>
           <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
@@ -148,7 +148,7 @@ export const Home: React.FC = () => {
       ) : (
         <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {posts.map((post) => (
+            {posts && posts.map((post) => (
               <div
                 key={post.id}
                 style={{

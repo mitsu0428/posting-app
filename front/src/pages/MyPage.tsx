@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { userApi, authApi } from '../utils/api';
-import { Post, PaginatedResponse } from '../types';
+import { Post } from '../types';
 
 export const MyPage: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -27,26 +27,40 @@ export const MyPage: React.FC = () => {
   const limit = 10;
   const { user, updateUser } = useAuth();
 
+  const fetchPosts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await userApi.getUserPosts(page, limit);
+      
+      // Handle the response structure safely
+      if (response && typeof response === 'object') {
+        const postsData = response.data || [];
+        const totalCount = response.total || 0;
+        
+        setPosts(Array.isArray(postsData) ? postsData : []);
+        setTotal(totalCount);
+      } else {
+        setPosts([]);
+        setTotal(0);
+      }
+    } catch (err: any) {
+      console.error('Error fetching user posts:', err);
+      setError(err.message || 'Failed to fetch posts');
+      setPosts([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, limit]);
+
   useEffect(() => {
     fetchPosts();
     if (user) {
       setDisplayName(user.display_name);
       setBio(user.bio || '');
     }
-  }, [page, user]);
-
-  const fetchPosts = async () => {
-    try {
-      setLoading(true);
-      const response: PaginatedResponse<Post> = await userApi.getUserPosts(page, limit);
-      setPosts(response.data);
-      setTotal(response.total);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch posts');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [page, user, fetchPosts]);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -446,7 +460,7 @@ export const MyPage: React.FC = () => {
           <div style={{ textAlign: 'center', padding: '2rem', color: '#dc2626' }}>
             Error: {error}
           </div>
-        ) : posts.length === 0 ? (
+        ) : posts && posts.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem' }}>
             <h3>No posts yet</h3>
             <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
@@ -469,7 +483,7 @@ export const MyPage: React.FC = () => {
         ) : (
           <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {posts.map((post) => (
+              {posts && posts.map((post) => (
                 <div
                   key={post.id}
                   style={{

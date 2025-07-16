@@ -43,7 +43,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./backend:/app
+      # - ./backend:/app  # Commenting out to avoid overriding built binary
       - backend_uploads:/app/uploads
     restart: unless-stopped
 

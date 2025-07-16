@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
 import { Button, Tabs, Tab, Box, Chip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { CheckCircle, Cancel, Visibility, Block } from '@mui/icons-material';
@@ -44,15 +44,7 @@ export const AdminDashboard: React.FC = () => {
     setTabValue(newValue);
   };
 
-  useEffect(() => {
-    if (tabValue === 0) {
-      fetchPosts();
-    } else if (tabValue === 1) {
-      fetchUsers();
-    }
-  }, [tabValue, postFilter]);
-
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
       setPostsLoading(true);
       setError('');
@@ -64,9 +56,9 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setPostsLoading(false);
     }
-  };
+  }, [postFilter]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setUsersLoading(true);
       setError('');
@@ -77,7 +69,15 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setUsersLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (tabValue === 0) {
+      fetchPosts();
+    } else if (tabValue === 1) {
+      fetchUsers();
+    }
+  }, [tabValue, postFilter, fetchPosts, fetchUsers]);
 
   const handleApprovePost = async (postId: number) => {
     try {
