@@ -23,7 +23,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}
+    >
       <header
         style={{
           backgroundColor: '#2563eb',
@@ -44,41 +46,44 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               fontWeight: 'bold',
             }}
           >
-            Posting App
+            掲示板
           </Link>
-          
+
           {user && (
             <nav style={{ display: 'flex', gap: '1rem' }}>
-              <Link
-                to="/"
-                style={{ color: 'white', textDecoration: 'none' }}
-              >
-                Home
+              <Link to="/" style={{ color: 'white', textDecoration: 'none' }}>
+                ホーム
               </Link>
               <Link
                 to="/create-post"
                 style={{ color: 'white', textDecoration: 'none' }}
               >
-                Create Post
+                新規作成
               </Link>
               <Link
                 to="/my-page"
                 style={{ color: 'white', textDecoration: 'none' }}
               >
-                My Page
+                マイページ
               </Link>
               <Link
                 to="/subscription"
                 style={{ color: 'white', textDecoration: 'none' }}
               >
-                Subscription
+                サブスクリプション
+              </Link>
+              <Link
+                to="/groups"
+                style={{ color: 'white', textDecoration: 'none' }}
+              >
+                グループ
               </Link>
               {user.role === 'admin' && (
                 <Link
                   to="/admin"
                   style={{ color: 'white', textDecoration: 'none' }}
                 >
-                  Admin
+                  管理画面
                 </Link>
               )}
             </nav>
@@ -88,7 +93,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {user ? (
             <>
-              <span>Welcome, {user.display_name}</span>
+              <span>ログイン済み： {user.display_name}</span>
               <button
                 onClick={handleLogout}
                 style={{
@@ -134,9 +139,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: '2rem' }}>
-        {children}
-      </main>
+      <main style={{ flex: 1, padding: '2rem' }}>{children}</main>
 
       <footer
         style={{
@@ -146,7 +149,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           borderTop: '1px solid #e5e7eb',
         }}
       >
-        <p>&copy; 2024 Posting App. All rights reserved.</p>
+        <p>&copy; 2025 合同会社ユウウェブ. All rights reserved.</p>
       </footer>
     </div>
   );

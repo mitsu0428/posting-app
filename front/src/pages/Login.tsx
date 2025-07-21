@@ -14,7 +14,7 @@ export const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
@@ -23,7 +23,7 @@ export const Login: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      
+
       const response = await authApi.login(email, password);
       login(response.access_token, response.user);
       navigate('/');
@@ -35,30 +35,81 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f9fafb' }}>
-      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', width: '100%', maxWidth: '400px' }}>
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        backgroundColor: '#f9fafb',
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: 'white',
+          padding: '2rem',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          width: '100%',
+          maxWidth: '400px',
+        }}
+      >
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h2 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1f2937' }}>
-            Sign in to your account
+          <h2
+            style={{
+              fontSize: '1.875rem',
+              fontWeight: '700',
+              color: '#1f2937',
+            }}
+          >
+            アカウントにログインする
           </h2>
           <p style={{ marginTop: '0.5rem', color: '#6b7280' }}>
-            Or{' '}
-            <Link to="/register" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
-              create a new account
+            または、
+            <Link
+              to="/register"
+              style={{
+                color: '#2563eb',
+                textDecoration: 'none',
+                fontWeight: '500',
+              }}
+            >
+              新規アカウントを作成する
             </Link>
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+        >
           {error && (
-            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+            <div
+              style={{
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#b91c1c',
+                padding: '0.75rem',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+              }}
+            >
               {error}
             </div>
           )}
 
           <div>
-            <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
-              Email address
+            <label
+              htmlFor="email"
+              style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.25rem',
+              }}
+            >
+              メールアドレス
             </label>
             <input
               id="email"
@@ -74,13 +125,22 @@ export const Login: React.FC = () => {
                 fontSize: '0.875rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="Enter your email"
+              placeholder="メールアドレスを入力してください"
             />
           </div>
 
           <div>
-            <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
-              Password
+            <label
+              htmlFor="password"
+              style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.25rem',
+              }}
+            >
+              パスワード
             </label>
             <input
               id="password"
@@ -96,13 +156,20 @@ export const Login: React.FC = () => {
                 fontSize: '0.875rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="Enter your password"
+              placeholder="パスワードを入力してください"
             />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Link to="/forgot-password" style={{ color: '#2563eb', textDecoration: 'none', fontSize: '0.875rem' }}>
-              Forgot your password?
+            <Link
+              to="/forgot-password"
+              style={{
+                color: '#2563eb',
+                textDecoration: 'none',
+                fontSize: '0.875rem',
+              }}
+            >
+              パスワードを忘れた場合
             </Link>
           </div>
 
@@ -121,18 +188,9 @@ export const Login: React.FC = () => {
               cursor: loading ? 'not-allowed' : 'pointer',
             }}
           >
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? 'ログイン中...' : 'ログイン'}
           </button>
         </form>
-
-        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-          <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-            Admin login?{' '}
-            <Link to="/admin-login-page" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
-              Sign in as admin
-            </Link>
-          </p>
-        </div>
       </div>
     </div>
   );

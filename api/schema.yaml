@@ -218,7 +218,8 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/GetPostsParams'
+        - $ref: '#/components/parameters/GetPostsPage'
+        - $ref: '#/components/parameters/GetPostsLimit'
       responses:
         '200':
           description: List of posts
@@ -366,6 +367,387 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /posts/{id}/like:
+    post:
+      summary: Toggle like on a post
+      tags: [Posts]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Like toggled successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Categories
+  /categories:
+    get:
+      summary: Get all categories
+      tags: [Categories]
+      responses:
+        '200':
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+
+    post:
+      summary: Create a new category (admin only)
+      tags: [Categories]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+      responses:
+        '201':
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # Groups
+  /groups:
+    get:
+      summary: Get user's groups
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of user's groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Create a new group
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupRequest'
+      responses:
+        '201':
+          description: Group created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /groups/{id}:
+    put:
+      summary: Update group
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupRequest'
+      responses:
+        '200':
+          description: Group updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete group
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Group deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /groups/{id}/members:
+    get:
+      summary: Get group members
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of group members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    display_name:
+                      type: string
+                    bio:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      summary: Add member to group
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddGroupMemberRequest'
+      responses:
+        '204':
+          description: Member added successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /groups/{id}/members/by-name:
+    post:
+      summary: Add member to group by display name
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+              required:
+                - display_name
+      responses:
+        '200':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /groups/{id}/members/{memberId}:
+    delete:
+      summary: Remove member from group
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: memberId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Member removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /groups/{id}/leave:
+    post:
+      summary: Leave group
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Left group successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /groups/{id}/posts:
+    get:
+      summary: Get posts in a group
+      tags: [Groups]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of group posts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetPosts200'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   # My page
   /user/posts:
     get:
@@ -394,6 +776,42 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  # User search
+  /users/search:
+    get:
+      summary: Search users by display name
+      tags: [User]
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 2
+          description: Search query for display names
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    display_name:
+                      type: string
+                    bio:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   # Admin endpoints
   /admin/posts:
     get:
@@ -402,7 +820,9 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/GetAdminPostsParams'
+        - $ref: '#/components/parameters/GetPostsPage'
+        - $ref: '#/components/parameters/GetPostsLimit'
+        - $ref: '#/components/parameters/GetAdminPostsStatus'
       responses:
         '200':
           description: List of posts for admin review
@@ -583,17 +1003,25 @@ components:
       bearerFormat: JWT
 
   parameters:
-    GetPostsParams:
+    GetPostsPage:
       in: query
-      name: params
+      name: page
       schema:
-        $ref: '#/components/schemas/GetPostsParams'
+        type: integer
+        default: 1
 
-    GetAdminPostsParams:
+    GetPostsLimit:
       in: query
-      name: params
+      name: limit
       schema:
-        $ref: '#/components/schemas/GetAdminPostsParams'
+        type: integer
+        default: 20
+
+    GetAdminPostsStatus:
+      in: query
+      name: status
+      schema:
+        $ref: '#/components/schemas/GetAdminPostsStatus'
 
   responses:
     BadRequest:
@@ -684,6 +1112,22 @@ components:
           $ref: '#/components/schemas/User'
         status:
           $ref: '#/components/schemas/PostStatus'
+        is_deleted:
+          type: boolean
+        group_id:
+          type: integer
+          nullable: true
+        group:
+          $ref: '#/components/schemas/Group'
+          nullable: true
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+        likes_count:
+          type: integer
+        is_liked:
+          type: boolean
         replies:
           type: array
           items:
@@ -781,6 +1225,12 @@ components:
         thumbnail:
           type: string
           format: binary
+        category_ids:
+          type: string
+          description: Comma-separated category IDs (max 5)
+        group_id:
+          type: integer
+          description: Group ID for membership posts
 
     CreateReplyRequest:
       type: object
@@ -792,33 +1242,12 @@ components:
         is_anonymous:
           type: boolean
 
-    GetPostsParams:
-      type: object
-      properties:
-        page:
-          type: integer
-          default: 1
-        limit:
-          type: integer
-          default: 20
-
-    GetAdminPostsParams:
-      type: object
-      properties:
-        page:
-          type: integer
-          default: 1
-        limit:
-          type: integer
-          default: 20
-        status:
-          $ref: '#/components/schemas/GetAdminPostsStatus'
 
     GetPosts200:
       type: object
-      required: [posts, total, page, limit]
+      required: [data, total, page, limit]
       properties:
-        posts:
+        data:
           type: array
           items:
             $ref: '#/components/schemas/Post'
@@ -875,3 +1304,104 @@ components:
           type: string
         data:
           type: object
+
+    Category:
+      type: object
+      required: [id, name, created_at]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        color:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateCategoryRequest:
+      type: object
+      required: [name, color]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+
+    Group:
+      type: object
+      required: [id, name, owner_id, created_at]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        owner_id:
+          type: integer
+        owner:
+          $ref: '#/components/schemas/User'
+          nullable: true
+        is_active:
+          type: boolean
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupMember'
+        member_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    GroupMember:
+      type: object
+      required: [id, group_id, user_id, role, joined_at]
+      properties:
+        id:
+          type: integer
+        group_id:
+          type: integer
+        user_id:
+          type: integer
+        user:
+          $ref: '#/components/schemas/User'
+          nullable: true
+        role:
+          type: string
+          enum: [owner, member]
+        joined_at:
+          type: string
+          format: date-time
+
+    CreateGroupRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+
+    AddGroupMemberRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id:
+          type: integer

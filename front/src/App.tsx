@@ -17,6 +17,7 @@ import { CreatePost } from './pages/CreatePost';
 import { PostDetail } from './pages/PostDetail';
 import { MyPage } from './pages/MyPage';
 import { Subscription } from './pages/Subscription';
+import { Groups } from './pages/Groups';
 import { AdminDashboard } from './pages/AdminDashboard';
 
 const queryClient = new QueryClient({
@@ -56,6 +57,7 @@ function App() {
                       <Route path="/posts/:id" element={<PrivateRoute><PostDetail /></PrivateRoute>} />
                       <Route path="/my-page" element={<PrivateRoute><MyPage /></PrivateRoute>} />
                       <Route path="/subscription" element={<PrivateRoute><Subscription /></PrivateRoute>} />
+                      <Route path="/groups" element={<PrivateRoute><Groups /></PrivateRoute>} />
 
                       {/* Admin routes */}
                       <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />

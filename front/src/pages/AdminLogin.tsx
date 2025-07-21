@@ -14,7 +14,7 @@ export const AdminLogin: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
@@ -23,7 +23,7 @@ export const AdminLogin: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      
+
       const response = await authApi.adminLogin(email, password);
       login(response.access_token, response.user);
       navigate('/admin');
@@ -35,27 +35,71 @@ export const AdminLogin: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f9fafb' }}>
-      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', width: '100%', maxWidth: '400px' }}>
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        backgroundColor: '#f9fafb',
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: 'white',
+          padding: '2rem',
+          borderRadius: '0.5rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          width: '100%',
+          maxWidth: '400px',
+        }}
+      >
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h2 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1f2937' }}>
-            Admin Login
+          <h2
+            style={{
+              fontSize: '1.875rem',
+              fontWeight: '700',
+              color: '#1f2937',
+            }}
+          >
+            管理者ログイン
           </h2>
           <p style={{ marginTop: '0.5rem', color: '#6b7280' }}>
-            Sign in with your admin credentials
+            管理者アカウントにログインする
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+        >
           {error && (
-            <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem' }}>
+            <div
+              style={{
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#b91c1c',
+                padding: '0.75rem',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+              }}
+            >
               {error}
             </div>
           )}
 
           <div>
-            <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
-              Admin Email
+            <label
+              htmlFor="email"
+              style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.25rem',
+              }}
+            >
+              メールアドレス
             </label>
             <input
               id="email"
@@ -71,13 +115,22 @@ export const AdminLogin: React.FC = () => {
                 fontSize: '0.875rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="Enter admin email"
+              placeholder="メールアドレスを入力してください"
             />
           </div>
 
           <div>
-            <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
-              Password
+            <label
+              htmlFor="password"
+              style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.25rem',
+              }}
+            >
+              パスワード
             </label>
             <input
               id="password"
@@ -93,7 +146,7 @@ export const AdminLogin: React.FC = () => {
                 fontSize: '0.875rem',
                 boxSizing: 'border-box',
               }}
-              placeholder="Enter admin password"
+              placeholder="管理者パスワードを入力してください"
             />
           </div>
 
@@ -112,22 +165,22 @@ export const AdminLogin: React.FC = () => {
               cursor: loading ? 'not-allowed' : 'pointer',
             }}
           >
-            {loading ? 'Signing in...' : 'Sign in as Admin'}
+            {loading ? 'ログイン中...' : 'ログイン'}
           </button>
         </form>
 
         <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
           <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-            Regular user?{' '}
-            <Link to="/login" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '500' }}>
-              Sign in here
+            <Link
+              to="/login"
+              style={{
+                color: '#2563eb',
+                textDecoration: 'none',
+                fontWeight: '500',
+              }}
+            >
+              一般ユーザーでログインする
             </Link>
-          </p>
-        </div>
-
-        <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '0.375rem' }}>
-          <p style={{ fontSize: '0.75rem', color: '#92400e', textAlign: 'center' }}>
-            Demo Admin: admin@example.com / admin123
           </p>
         </div>
       </div>

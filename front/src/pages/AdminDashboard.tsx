@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DataGrid, GridColDef, GridActionsCellItem } from '@mui/x-data-grid';
-import { Button, Tabs, Tab, Box, Chip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import {
+  Button,
+  Tabs,
+  Tab,
+  Box,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from '@mui/material';
 import { CheckCircle, Cancel, Visibility, Block } from '@mui/icons-material';
 import { adminApi } from '../utils/api';
 import { Post, User, PaginatedResponse } from '../types';
@@ -49,10 +59,15 @@ export const AdminDashboard: React.FC = () => {
       setPostsLoading(true);
       setError('');
       const statusParam = postFilter === 'all' ? undefined : postFilter;
-      const response: PaginatedResponse<Post> = await adminApi.getPosts(1, 100, statusParam);
-      setPosts(response.data);
+      const response: PaginatedResponse<Post> = await adminApi.getPosts(
+        1,
+        100,
+        statusParam
+      );
+      setPosts(Array.isArray(response?.data) ? response.data : []);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch posts');
+      setPosts([]);
     } finally {
       setPostsLoading(false);
     }
@@ -63,9 +78,10 @@ export const AdminDashboard: React.FC = () => {
       setUsersLoading(true);
       setError('');
       const response: PaginatedResponse<User> = await adminApi.getUsers(1, 100);
-      setUsers(response.data);
+      setUsers(Array.isArray(response?.data) ? response.data : []);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch users');
+      setUsers([]);
     } finally {
       setUsersLoading(false);
     }
@@ -137,7 +153,10 @@ export const AdminDashboard: React.FC = () => {
       rejected: { color: 'error' as const, label: 'Rejected' },
     };
 
-    const config = statusConfig[status as keyof typeof statusConfig] || { color: 'default' as const, label: status };
+    const config = statusConfig[status as keyof typeof statusConfig] || {
+      color: 'default' as const,
+      label: status,
+    };
     return <Chip label={config.label} color={config.color} size="small" />;
   };
 
@@ -149,30 +168,33 @@ export const AdminDashboard: React.FC = () => {
       canceled: { color: 'error' as const, label: 'Canceled' },
     };
 
-    const config = statusConfig[status as keyof typeof statusConfig] || { color: 'default' as const, label: status };
+    const config = statusConfig[status as keyof typeof statusConfig] || {
+      color: 'default' as const,
+      label: status,
+    };
     return <Chip label={config.label} color={config.color} size="small" />;
   };
 
   const postColumns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
     { field: 'title', headerName: 'Title', width: 250 },
-    { 
-      field: 'author', 
-      headerName: 'Author', 
+    {
+      field: 'author',
+      headerName: 'Author',
       width: 150,
-      valueGetter: (params) => params.row.author?.display_name || 'Unknown'
+      valueGetter: (params) => params.row.author?.display_name || 'Unknown',
     },
-    { 
-      field: 'status', 
-      headerName: 'Status', 
+    {
+      field: 'status',
+      headerName: 'Status',
       width: 120,
-      renderCell: (params) => getStatusChip(params.value)
+      renderCell: (params) => getStatusChip(params.value),
     },
-    { 
-      field: 'created_at', 
-      headerName: 'Created', 
+    {
+      field: 'created_at',
+      headerName: 'Created',
       width: 150,
-      valueGetter: (params) => new Date(params.value).toLocaleDateString()
+      valueGetter: (params) => new Date(params.value).toLocaleDateString(),
     },
     {
       field: 'actions',
@@ -185,20 +207,22 @@ export const AdminDashboard: React.FC = () => {
           label="View"
           onClick={() => handleViewPost(params.row)}
         />,
-        ...(params.row.status === 'pending' ? [
-          <GridActionsCellItem
-            icon={<CheckCircle />}
-            label="Approve"
-            onClick={() => handleApprovePost(params.row.id)}
-            disabled={actionLoading}
-          />,
-          <GridActionsCellItem
-            icon={<Cancel />}
-            label="Reject"
-            onClick={() => handleRejectPost(params.row.id)}
-            disabled={actionLoading}
-          />
-        ] : [])
+        ...(params.row.status === 'pending'
+          ? [
+              <GridActionsCellItem
+                icon={<CheckCircle />}
+                label="Approve"
+                onClick={() => handleApprovePost(params.row.id)}
+                disabled={actionLoading}
+              />,
+              <GridActionsCellItem
+                icon={<Cancel />}
+                label="Reject"
+                onClick={() => handleRejectPost(params.row.id)}
+                disabled={actionLoading}
+              />,
+            ]
+          : []),
       ],
     },
   ];
@@ -208,29 +232,29 @@ export const AdminDashboard: React.FC = () => {
     { field: 'email', headerName: 'Email', width: 200 },
     { field: 'display_name', headerName: 'Display Name', width: 150 },
     { field: 'role', headerName: 'Role', width: 100 },
-    { 
-      field: 'subscription_status', 
-      headerName: 'Subscription', 
+    {
+      field: 'subscription_status',
+      headerName: 'Subscription',
       width: 120,
-      renderCell: (params) => getSubscriptionChip(params.value)
+      renderCell: (params) => getSubscriptionChip(params.value),
     },
-    { 
-      field: 'is_active', 
-      headerName: 'Status', 
+    {
+      field: 'is_active',
+      headerName: 'Status',
       width: 100,
       renderCell: (params) => (
-        <Chip 
-          label={params.value ? 'Active' : 'Banned'} 
-          color={params.value ? 'success' : 'error'} 
-          size="small" 
+        <Chip
+          label={params.value ? 'Active' : 'Banned'}
+          color={params.value ? 'success' : 'error'}
+          size="small"
         />
-      )
+      ),
     },
-    { 
-      field: 'created_at', 
-      headerName: 'Joined', 
+    {
+      field: 'created_at',
+      headerName: 'Joined',
       width: 150,
-      valueGetter: (params) => new Date(params.value).toLocaleDateString()
+      valueGetter: (params) => new Date(params.value).toLocaleDateString(),
     },
     {
       field: 'actions',
@@ -238,14 +262,16 @@ export const AdminDashboard: React.FC = () => {
       headerName: 'Actions',
       width: 100,
       getActions: (params) => [
-        ...(params.row.is_active && params.row.role !== 'admin' ? [
-          <GridActionsCellItem
-            icon={<Block />}
-            label="Ban"
-            onClick={() => handleBanUser(params.row.id)}
-            disabled={actionLoading}
-          />
-        ] : [])
+        ...(params.row.is_active && params.row.role !== 'admin'
+          ? [
+              <GridActionsCellItem
+                icon={<Block />}
+                label="Ban"
+                onClick={() => handleBanUser(params.row.id)}
+                disabled={actionLoading}
+              />,
+            ]
+          : []),
       ],
     },
   ];
@@ -253,25 +279,43 @@ export const AdminDashboard: React.FC = () => {
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '2rem' }}>
-        Admin Dashboard
+        管理者ダッシュボード
       </h1>
 
       {error && (
-        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', marginBottom: '1rem' }}>
+        <div
+          style={{
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            color: '#b91c1c',
+            padding: '0.75rem',
+            borderRadius: '0.375rem',
+            marginBottom: '1rem',
+          }}
+        >
           {error}
         </div>
       )}
 
       {success && (
-        <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', padding: '0.75rem', borderRadius: '0.375rem', marginBottom: '1rem' }}>
+        <div
+          style={{
+            backgroundColor: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            color: '#15803d',
+            padding: '0.75rem',
+            borderRadius: '0.375rem',
+            marginBottom: '1rem',
+          }}
+        >
           {success}
         </div>
       )}
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', marginBottom: 2 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
-          <Tab label="Posts Management" />
-          <Tab label="Users Management" />
+          <Tab label="投稿管理" />
+          <Tab label="ユーザー管理" />
         </Tabs>
       </Box>
 
@@ -282,38 +326,42 @@ export const AdminDashboard: React.FC = () => {
               variant={postFilter === 'all' ? 'contained' : 'outlined'}
               onClick={() => setPostFilter('all')}
             >
-              All Posts
+              全ての投稿
             </Button>
             <Button
               variant={postFilter === 'pending' ? 'contained' : 'outlined'}
               onClick={() => setPostFilter('pending')}
             >
-              Pending
+              保留中の投稿
             </Button>
             <Button
               variant={postFilter === 'approved' ? 'contained' : 'outlined'}
               onClick={() => setPostFilter('approved')}
             >
-              Approved
+              承認済みの投稿
             </Button>
             <Button
               variant={postFilter === 'rejected' ? 'contained' : 'outlined'}
               onClick={() => setPostFilter('rejected')}
             >
-              Rejected
+              拒否された投稿
             </Button>
           </div>
         </div>
 
         <div style={{ height: 600, width: '100%', backgroundColor: 'white' }}>
           <DataGrid
-            rows={posts}
+            rows={
+              Array.isArray(posts)
+                ? posts.filter((post) => post && post.id)
+                : []
+            }
             columns={postColumns}
             loading={postsLoading}
             initialState={{
               pagination: {
-                paginationModel: { page: 0, pageSize: 10 }
-              }
+                paginationModel: { page: 0, pageSize: 10 },
+              },
             }}
             pageSizeOptions={[10, 25, 50]}
             disableRowSelectionOnClick
@@ -324,13 +372,17 @@ export const AdminDashboard: React.FC = () => {
       <TabPanel value={tabValue} index={1}>
         <div style={{ height: 600, width: '100%', backgroundColor: 'white' }}>
           <DataGrid
-            rows={users}
+            rows={
+              Array.isArray(users)
+                ? users.filter((user) => user && user.id)
+                : []
+            }
             columns={userColumns}
             loading={usersLoading}
             initialState={{
               pagination: {
-                paginationModel: { page: 0, pageSize: 10 }
-              }
+                paginationModel: { page: 0, pageSize: 10 },
+              },
             }}
             pageSizeOptions={[10, 25, 50]}
             disableRowSelectionOnClick
@@ -339,15 +391,13 @@ export const AdminDashboard: React.FC = () => {
       </TabPanel>
 
       {/* Post View Dialog */}
-      <Dialog 
-        open={viewDialogOpen} 
+      <Dialog
+        open={viewDialogOpen}
         onClose={() => setViewDialogOpen(false)}
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
-          Post Details
-        </DialogTitle>
+        <DialogTitle>Post Details</DialogTitle>
         <DialogContent>
           {selectedPost && (
             <div>
@@ -361,29 +411,38 @@ export const AdminDashboard: React.FC = () => {
                 <strong>Status:</strong> {getStatusChip(selectedPost.status)}
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <strong>Created:</strong> {new Date(selectedPost.created_at).toLocaleString()}
+                <strong>Created:</strong>{' '}
+                {new Date(selectedPost.created_at).toLocaleString()}
               </div>
               {selectedPost.thumbnail_url && (
                 <div style={{ marginBottom: '1rem' }}>
                   <strong>Thumbnail:</strong>
                   <br />
-                  <img 
-                    src={selectedPost.thumbnail_url} 
-                    alt="Post thumbnail" 
-                    style={{ maxWidth: '200px', maxHeight: '150px', objectFit: 'cover', borderRadius: '4px', marginTop: '0.5rem' }}
+                  <img
+                    src={selectedPost.thumbnail_url}
+                    alt="Post thumbnail"
+                    style={{
+                      maxWidth: '200px',
+                      maxHeight: '150px',
+                      objectFit: 'cover',
+                      borderRadius: '4px',
+                      marginTop: '0.5rem',
+                    }}
                   />
                 </div>
               )}
               <div style={{ marginBottom: '1rem' }}>
                 <strong>Content:</strong>
-                <div style={{ 
-                  padding: '1rem', 
-                  backgroundColor: '#f9fafb', 
-                  borderRadius: '4px', 
-                  marginTop: '0.5rem',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word'
-                }}>
+                <div
+                  style={{
+                    padding: '1rem',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '4px',
+                    marginTop: '0.5rem',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
                   {selectedPost.content}
                 </div>
               </div>
@@ -392,17 +451,30 @@ export const AdminDashboard: React.FC = () => {
                   <strong>Replies ({selectedPost.replies.length}):</strong>
                   <div style={{ marginTop: '0.5rem' }}>
                     {selectedPost.replies.map((reply) => (
-                      <div key={reply.id} style={{ 
-                        padding: '0.5rem', 
-                        backgroundColor: '#f3f4f6', 
-                        borderRadius: '4px', 
-                        marginBottom: '0.5rem',
-                        fontSize: '0.875rem'
-                      }}>
-                        <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>
-                          {reply.is_anonymous ? 'Anonymous' : reply.author?.display_name || 'Unknown'} • {new Date(reply.created_at).toLocaleDateString()}
+                      <div
+                        key={reply.id}
+                        style={{
+                          padding: '0.5rem',
+                          backgroundColor: '#f3f4f6',
+                          borderRadius: '4px',
+                          marginBottom: '0.5rem',
+                          fontSize: '0.875rem',
+                        }}
+                      >
+                        <div
+                          style={{ fontWeight: '500', marginBottom: '0.25rem' }}
+                        >
+                          {reply.is_anonymous
+                            ? 'Anonymous'
+                            : reply.author?.display_name || 'Unknown'}{' '}
+                          • {new Date(reply.created_at).toLocaleDateString()}
                         </div>
-                        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        <div
+                          style={{
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                          }}
+                        >
                           {reply.content}
                         </div>
                       </div>
@@ -416,7 +488,7 @@ export const AdminDashboard: React.FC = () => {
         <DialogActions>
           {selectedPost?.status === 'pending' && (
             <>
-              <Button 
+              <Button
                 onClick={() => {
                   handleApprovePost(selectedPost.id);
                   setViewDialogOpen(false);
@@ -426,7 +498,7 @@ export const AdminDashboard: React.FC = () => {
               >
                 Approve
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   handleRejectPost(selectedPost.id);
                   setViewDialogOpen(false);

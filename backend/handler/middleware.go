@@ -39,7 +39,7 @@ func AuthMiddleware(jwtService *infrastructure.JWTService) func(http.Handler) ht
 			user := &domain.User{
 				ID:    claims.UserID,
 				Email: claims.Email,
-				Role:  claims.Role,
+				Role:  domain.UserRole(claims.Role),
 			}
 
 			ctx := context.WithValue(r.Context(), UserContextKey, user)
@@ -56,7 +56,7 @@ func AdminMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if user.Role != string(domain.UserRoleAdmin) {
+		if user.Role != domain.UserRoleAdmin {
 			http.Error(w, "Admin access required", http.StatusForbidden)
 			return
 		}

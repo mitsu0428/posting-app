@@ -1,12 +1,12 @@
 import axios, { AxiosRequestConfig } from 'axios';
 
-export const customInstance = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8080',
+const axiosInstance = axios.create({
+  baseURL: process.env.NODE_ENV === 'production' ? (process.env.REACT_APP_API_URL || 'http://localhost:8080') : '',
   withCredentials: true,
 });
 
 // Request interceptor to add auth token
-customInstance.interceptors.request.use(
+axiosInstance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('access_token');
     if (token) {
@@ -20,7 +20,7 @@ customInstance.interceptors.request.use(
 );
 
 // Response interceptor to handle auth errors
-customInstance.interceptors.response.use(
+axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
@@ -34,7 +34,7 @@ customInstance.interceptors.response.use(
 
 const apiMutator = <T = any>(config: AxiosRequestConfig): Promise<T> => {
   const source = axios.CancelToken.source();
-  const promise = customInstance({
+  const promise = axiosInstance({
     ...config,
     cancelToken: source.token,
   }).then(({ data }) => data);
@@ -48,3 +48,5 @@ const apiMutator = <T = any>(config: AxiosRequestConfig): Promise<T> => {
 };
 
 export default apiMutator;
+export { apiMutator as customInstance };
+export { axiosInstance };

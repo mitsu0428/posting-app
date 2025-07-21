@@ -49,7 +49,7 @@ func (u *AuthUsecase) Register(email, password, displayName string) (*domain.Use
 		Email:              email,
 		PasswordHash:       string(hashedPassword),
 		DisplayName:        displayName,
-		Role:               string(domain.UserRoleUser),
+		Role:               domain.UserRoleUser,
 		SubscriptionStatus: domain.UserSubscriptionStatusInactive,
 		IsActive:           true,
 		EmailVerified:      true, // For simplicity, we'll skip email verification
@@ -98,7 +98,7 @@ func (u *AuthUsecase) AdminLogin(email, password string) (*domain.User, string, 
 		return nil, "", errors.New("account is deactivated")
 	}
 
-	if user.Role != string(domain.UserRoleAdmin) {
+	if user.Role != domain.UserRoleAdmin {
 		return nil, "", errors.New("admin access required")
 	}
 

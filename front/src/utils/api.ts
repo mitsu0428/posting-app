@@ -1,4 +1,4 @@
-import { customInstance } from './api-mutator';
+import { axiosInstance } from './api-mutator';
 
 export interface LoginResponse {
   user: {
@@ -17,7 +17,7 @@ export interface LoginResponse {
 
 export const authApi = {
   login: async (email: string, password: string): Promise<LoginResponse> => {
-    const response = await customInstance.post('/auth/login', {
+    const response = await axiosInstance.post('/auth/login', {
       email,
       password,
     });
@@ -29,7 +29,7 @@ export const authApi = {
     password: string,
     display_name: string
   ): Promise<any> => {
-    const response = await customInstance.post('/auth/register', {
+    const response = await axiosInstance.post('/auth/register', {
       email,
       password,
       display_name,
@@ -38,7 +38,7 @@ export const authApi = {
   },
 
   adminLogin: async (email: string, password: string): Promise<LoginResponse> => {
-    const response = await customInstance.post('/admin/login', {
+    const response = await axiosInstance.post('/admin/login', {
       email,
       password,
     });
@@ -46,18 +46,18 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
-    await customInstance.post('/auth/logout');
+    await axiosInstance.post('/auth/logout');
   },
 
   forgotPassword: async (email: string): Promise<any> => {
-    const response = await customInstance.post('/auth/forgot-password', {
+    const response = await axiosInstance.post('/auth/forgot-password', {
       email,
     });
     return response.data;
   },
 
   resetPassword: async (token: string, new_password: string): Promise<any> => {
-    const response = await customInstance.post('/auth/reset-password', {
+    const response = await axiosInstance.post('/auth/reset-password', {
       token,
       new_password,
     });
@@ -68,7 +68,7 @@ export const authApi = {
     current_password: string,
     new_password: string
   ): Promise<any> => {
-    const response = await customInstance.post('/user/change-password', {
+    const response = await axiosInstance.post('/user/change-password', {
       current_password,
       new_password,
     });
@@ -78,7 +78,7 @@ export const authApi = {
 
 export const userApi = {
   getProfile: async (): Promise<any> => {
-    const response = await customInstance.get('/user/profile');
+    const response = await axiosInstance.get('/user/profile');
     return response.data;
   },
 
@@ -86,7 +86,7 @@ export const userApi = {
     display_name: string,
     bio?: string
   ): Promise<any> => {
-    const response = await customInstance.put('/user/profile', {
+    const response = await axiosInstance.put('/user/profile', {
       display_name,
       bio,
     });
@@ -94,12 +94,12 @@ export const userApi = {
   },
 
   deactivateAccount: async (): Promise<any> => {
-    const response = await customInstance.post('/user/deactivate');
+    const response = await axiosInstance.post('/user/deactivate');
     return response.data;
   },
 
   getUserPosts: async (page = 1, limit = 20): Promise<any> => {
-    const response = await customInstance.get(
+    const response = await axiosInstance.get(
       `/user/posts?page=${page}&limit=${limit}`
     );
     return response.data;
@@ -108,19 +108,19 @@ export const userApi = {
 
 export const postApi = {
   getPosts: async (page = 1, limit = 20): Promise<any> => {
-    const response = await customInstance.get(
+    const response = await axiosInstance.get(
       `/posts?page=${page}&limit=${limit}`
     );
     return response.data;
   },
 
   getPost: async (id: number): Promise<any> => {
-    const response = await customInstance.get(`/posts/${id}`);
+    const response = await axiosInstance.get(`/posts/${id}`);
     return response.data;
   },
 
   createPost: async (formData: FormData): Promise<any> => {
-    const response = await customInstance.post('/posts', formData, {
+    const response = await axiosInstance.post('/posts', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -129,7 +129,7 @@ export const postApi = {
   },
 
   updatePost: async (id: number, formData: FormData): Promise<any> => {
-    const response = await customInstance.put(`/posts/${id}`, formData, {
+    const response = await axiosInstance.put(`/posts/${id}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -138,7 +138,7 @@ export const postApi = {
   },
 
   deletePost: async (id: number): Promise<void> => {
-    await customInstance.delete(`/posts/${id}`);
+    await axiosInstance.delete(`/posts/${id}`);
   },
 
   createReply: async (
@@ -146,7 +146,7 @@ export const postApi = {
     content: string,
     isAnonymous: boolean
   ): Promise<any> => {
-    const response = await customInstance.post(`/posts/${postId}/replies`, {
+    const response = await axiosInstance.post(`/posts/${postId}/replies`, {
       content,
       is_anonymous: isAnonymous,
     });
@@ -156,12 +156,12 @@ export const postApi = {
 
 export const subscriptionApi = {
   getStatus: async (): Promise<any> => {
-    const response = await customInstance.get('/subscription/status');
+    const response = await axiosInstance.get('/subscription/status');
     return response.data;
   },
 
   createCheckoutSession: async (): Promise<{ url: string }> => {
-    const response = await customInstance.post(
+    const response = await axiosInstance.post(
       '/subscription/create-checkout-session'
     );
     return response.data;
@@ -181,29 +181,51 @@ export const adminApi = {
     if (status) {
       params.append('status', status);
     }
-    const response = await customInstance.get(`/admin/posts?${params}`);
+    const response = await axiosInstance.get(`/admin/posts?${params}`);
     return response.data;
   },
 
   approvePost: async (id: number): Promise<any> => {
-    const response = await customInstance.post(`/admin/posts/${id}/approve`);
+    const response = await axiosInstance.post(`/admin/posts/${id}/approve`);
     return response.data;
   },
 
   rejectPost: async (id: number): Promise<any> => {
-    const response = await customInstance.post(`/admin/posts/${id}/reject`);
+    const response = await axiosInstance.post(`/admin/posts/${id}/reject`);
     return response.data;
   },
 
   getUsers: async (page = 1, limit = 20): Promise<any> => {
-    const response = await customInstance.get(
+    const response = await axiosInstance.get(
       `/admin/users?page=${page}&limit=${limit}`
     );
     return response.data;
   },
 
   banUser: async (id: number): Promise<any> => {
-    const response = await customInstance.post(`/admin/users/${id}/ban`);
+    const response = await axiosInstance.post(`/admin/users/${id}/ban`);
+    return response.data;
+  },
+};
+
+export const groupApi = {
+  deleteGroup: async (id: number): Promise<{ message: string }> => {
+    const response = await axiosInstance.delete(`/groups/${id}`);
+    return response.data;
+  },
+  
+  getGroupMembers: async (id: number): Promise<Array<{ id: number; display_name: string; bio: string }>> => {
+    const response = await axiosInstance.get(`/groups/${id}/members`);
+    return response.data;
+  },
+  
+  removeGroupMember: async (groupId: number, memberId: number): Promise<{ message: string }> => {
+    const response = await axiosInstance.delete(`/groups/${groupId}/members/${memberId}`);
+    return response.data;
+  },
+  
+  leaveGroup: async (id: number): Promise<{ message: string }> => {
+    const response = await axiosInstance.post(`/groups/${id}/leave`);
     return response.data;
   },
 };

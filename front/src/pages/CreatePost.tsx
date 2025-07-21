@@ -1,13 +1,20 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { postApi } from '../utils/api';
+import { getCategories, getGroups } from '../generated/api';
+import { Category } from '../generated/models/category';
+import { Group } from '../generated/models/group';
 
 export const CreatePost: React.FC = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [thumbnail, setThumbnail] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string>('');
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -15,9 +22,39 @@ export const CreatePost: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [categoriesData, groupsData] = await Promise.all([
+          getCategories(),
+          getGroups(),
+        ]);
+        setCategories(categoriesData || []);
+        setGroups(groupsData || []);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const handleCategoryToggle = (categoryId: number) => {
+    setSelectedCategoryIds((prev) => {
+      if (prev.includes(categoryId)) {
+        return prev.filter((id) => id !== categoryId);
+      } else if (prev.length < 5) {
+        return [...prev, categoryId];
+      } else {
+        setError('最大5個までカテゴリを選択できます');
+        return prev;
+      }
+    });
+  };
+
   const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    
+
     if (!file) return;
 
     // Check file size (5MB)
@@ -86,7 +123,15 @@ export const CreatePost: React.FC = () => {
       const formData = new FormData();
       formData.append('title', title.trim());
       formData.append('content', content.trim());
-      
+
+      if (selectedCategoryIds.length > 0) {
+        formData.append('category_ids', selectedCategoryIds.join(','));
+      }
+
+      if (selectedGroupId) {
+        formData.append('group_id', selectedGroupId.toString());
+      }
+
       if (thumbnail) {
         formData.append('thumbnail', thumbnail);
       }
@@ -103,8 +148,17 @@ export const CreatePost: React.FC = () => {
   if (user?.subscription_status !== 'active') {
     return (
       <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-        <div style={{ backgroundColor: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '0.5rem', padding: '2rem' }}>
-          <h2 style={{ color: '#92400e', marginBottom: '1rem' }}>Subscription Required</h2>
+        <div
+          style={{
+            backgroundColor: '#fef3c7',
+            border: '1px solid #fbbf24',
+            borderRadius: '0.5rem',
+            padding: '2rem',
+          }}
+        >
+          <h2 style={{ color: '#92400e', marginBottom: '1rem' }}>
+            Subscription Required
+          </h2>
           <p style={{ color: '#92400e', marginBottom: '1.5rem' }}>
             You need an active subscription to create posts.
           </p>
@@ -130,18 +184,38 @@ export const CreatePost: React.FC = () => {
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '2rem' }}>
-        Create New Post
+        新規投稿
       </h1>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}
+      >
         {error && (
-          <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem' }}>
+          <div
+            style={{
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#b91c1c',
+              padding: '0.75rem',
+              borderRadius: '0.375rem',
+            }}
+          >
             {error}
           </div>
         )}
 
         <div>
-          <label htmlFor="title" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
+          <label
+            htmlFor="title"
+            style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: '0.5rem',
+            }}
+          >
             Title <span style={{ color: '#dc2626' }}>*</span>
           </label>
           <input
@@ -161,14 +235,126 @@ export const CreatePost: React.FC = () => {
             }}
             placeholder="Enter post title"
           />
-          <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
-            {title.length}/200 characters
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: '#6b7280',
+              marginTop: '0.25rem',
+            }}
+          >
+            {title.length}/200 字
           </div>
         </div>
 
         <div>
-          <label htmlFor="thumbnail" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-            Thumbnail Image (optional)
+          <label
+            style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: '0.5rem',
+            }}
+          >
+            カテゴリ (最大5個まで)
+          </label>
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.5rem',
+              marginBottom: '0.5rem',
+            }}
+          >
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => handleCategoryToggle(category.id)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  border: selectedCategoryIds.includes(category.id)
+                    ? `2px solid ${category.color}`
+                    : '1px solid #d1d5db',
+                  backgroundColor: selectedCategoryIds.includes(category.id)
+                    ? category.color
+                    : 'white',
+                  color: selectedCategoryIds.includes(category.id)
+                    ? 'white'
+                    : '#374151',
+                  borderRadius: '1rem',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                  fontWeight: selectedCategoryIds.includes(category.id)
+                    ? '600'
+                    : '400',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {category.name}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+            選択中: {selectedCategoryIds.length}/5
+          </div>
+        </div>
+
+        <div>
+          <label
+            style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: '0.5rem',
+            }}
+          >
+            グループ (任意)
+          </label>
+          <div style={{ marginBottom: '0.5rem' }}>
+            <select
+              value={selectedGroupId || ''}
+              onChange={(e) =>
+                setSelectedGroupId(
+                  e.target.value ? Number(e.target.value) : null
+                )
+              }
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '1rem',
+                backgroundColor: 'white',
+                boxSizing: 'border-box',
+              }}
+            >
+              <option value="">公開投稿（グループなし）</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+            グループを選択すると、そのグループのメンバーのみが投稿を見ることができます
+          </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="thumbnail"
+            style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: '0.5rem',
+            }}
+          >
+            サムネイル (任意)
           </label>
           <input
             ref={fileInputRef}
@@ -184,12 +370,24 @@ export const CreatePost: React.FC = () => {
               boxSizing: 'border-box',
             }}
           />
-          <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
-            JPEG or PNG, max 5MB
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: '#6b7280',
+              marginTop: '0.25rem',
+            }}
+          >
+            JPEGまたはPNGで最大5MBまで
           </div>
-          
+
           {thumbnailPreview && (
-            <div style={{ marginTop: '1rem', position: 'relative', display: 'inline-block' }}>
+            <div
+              style={{
+                marginTop: '1rem',
+                position: 'relative',
+                display: 'inline-block',
+              }}
+            >
               <img
                 src={thumbnailPreview}
                 alt="Thumbnail preview"
@@ -225,8 +423,17 @@ export const CreatePost: React.FC = () => {
         </div>
 
         <div>
-          <label htmlFor="content" style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.5rem' }}>
-            Content <span style={{ color: '#dc2626' }}>*</span>
+          <label
+            htmlFor="content"
+            style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: '0.5rem',
+            }}
+          >
+            内容 <span style={{ color: '#dc2626' }}>*</span>
           </label>
           <textarea
             id="content"
@@ -245,14 +452,22 @@ export const CreatePost: React.FC = () => {
               resize: 'vertical',
               boxSizing: 'border-box',
             }}
-            placeholder="Write your post content here..."
+            placeholder="投稿する内容を入力..."
           />
-          <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
-            {content.length}/5000 characters
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: '#6b7280',
+              marginTop: '0.25rem',
+            }}
+          >
+            {content.length}/5000 字
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+        <div
+          style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}
+        >
           <button
             type="button"
             onClick={() => navigate(-1)}
@@ -266,7 +481,7 @@ export const CreatePost: React.FC = () => {
               cursor: 'pointer',
             }}
           >
-            Cancel
+            キャンセル
           </button>
           <button
             type="submit"
@@ -281,7 +496,7 @@ export const CreatePost: React.FC = () => {
               cursor: loading ? 'not-allowed' : 'pointer',
             }}
           >
-            {loading ? 'Creating...' : 'Create Post'}
+            {loading ? '作成中...' : '作成'}
           </button>
         </div>
       </form>

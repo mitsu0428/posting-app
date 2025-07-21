@@ -10,7 +10,7 @@ type User struct {
 	PasswordHash       string                 `json:"-" db:"password_hash"`
 	DisplayName        string                 `json:"display_name" db:"display_name"`
 	Bio                *string                `json:"bio" db:"bio"`
-	Role               string                 `json:"role" db:"role"`
+	Role               UserRole               `json:"role" db:"role"`
 	SubscriptionStatus UserSubscriptionStatus `json:"subscription_status" db:"subscription_status"`
 	StripeCustomerID   *string                `json:"-" db:"stripe_customer_id"`
 	IsActive           bool                   `json:"is_active" db:"is_active"`

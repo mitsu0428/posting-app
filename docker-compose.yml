@@ -35,6 +35,7 @@ services:
       - STRIPE_API_KEY=sk_test_your_stripe_secret_key_here
       - STRIPE_PRICE_ID=price_your_stripe_price_id_here
       - STRIPE_WEBHOOK_SECRET=whsec_your_stripe_webhook_secret_here
+      - STRIPE_MOCK_MODE=true
       - BASE_URL=http://localhost:3000
       - PORT=8080
     ports:
@@ -52,7 +53,7 @@ services:
       context: ./front
       dockerfile: Dockerfile
     environment:
-      - REACT_APP_API_URL=http://localhost:8080
+      - REACT_APP_API_URL=http://backend:8080
     ports:
       - "3000:3000"
     depends_on:

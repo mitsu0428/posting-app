@@ -21,6 +21,7 @@ type Config struct {
 	StripeAPIKey        string `envconfig:"STRIPE_API_KEY" required:"true"`
 	StripePriceID       string `envconfig:"STRIPE_PRICE_ID" required:"true"`
 	StripeWebhookSecret string `envconfig:"STRIPE_WEBHOOK_SECRET" required:"true"`
+	StripeMockMode      bool   `envconfig:"STRIPE_MOCK_MODE" default:"false"`
 	BaseURL             string `envconfig:"BASE_URL" default:"http://localhost:3000"`
 }
 
@@ -50,6 +51,7 @@ func NewContainer(config Config) (*Container, error) {
 		config.StripePriceID,
 		config.StripeWebhookSecret,
 		config.BaseURL,
+		config.StripeMockMode,
 	)
 
 	// Handlers

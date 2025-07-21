@@ -9,6 +9,7 @@ module.exports = {
       mock: false,
       clean: true,
       prettier: true,
+      tsconfig: 'tsconfig.json',
       override: {
         mutator: {
           path: './src/utils/api-mutator.ts',
@@ -20,6 +21,13 @@ module.exports = {
           signal: true,
         },
       },
+    },
+    hooks: {
+      afterAllFilesWrite: [
+        {
+          command: 'npx prettier --write src/generated/**/*.ts',
+        },
+      ],
     },
   },
 };

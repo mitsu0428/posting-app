@@ -77,7 +77,35 @@ func NewRouter(handlers *Handlers, jwtService *infrastructure.JWTService) http.H
 			r.Put("/{id}", handlers.Post.UpdatePost)
 			r.Delete("/{id}", handlers.Post.DeletePost)
 			r.Post("/{id}/replies", handlers.Post.CreateReply)
+			r.Post("/{id}/like", handlers.Post.ToggleLike)
 		})
+
+		// Category routes
+		r.Route("/categories", func(r chi.Router) {
+			r.Get("/", handlers.Post.GetCategories)
+			r.Post("/", handlers.Post.CreateCategory) // Admin only, but we'll handle auth in handler
+		})
+
+		// Group routes
+		r.Route("/groups", func(r chi.Router) {
+			r.Get("/", handlers.Post.GetUserGroups)
+			r.Post("/", handlers.Post.CreateGroup)
+			
+			// More specific routes first
+			r.Post("/{id}/members/by-name", handlers.Post.AddGroupMemberByDisplayName)
+			r.Delete("/{id}/members/{memberId}", handlers.Post.RemoveGroupMember)
+			r.Get("/{id}/members", handlers.Post.GetGroupMembers)
+			r.Post("/{id}/leave", handlers.Post.LeaveGroup)
+			r.Get("/{id}/posts", handlers.Post.GetGroupPosts)
+			
+			// General routes last
+			r.Put("/{id}", handlers.Post.UpdateGroup)
+			r.Delete("/{id}", handlers.Post.DeleteGroup)
+			// r.Post("/{id}/members", handlers.Post.AddGroupMember)
+		})
+
+		// User search routes
+		r.Get("/users/search", handlers.Post.SearchUsers)
 
 		// Subscription routes
 		r.Route("/subscription", func(r chi.Router) {

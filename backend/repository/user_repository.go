@@ -152,3 +152,55 @@ func (r *UserRepository) Ban(userID int) error {
 	_, err := r.db.Exec(query, userID)
 	return err
 }
+
+func (r *UserRepository) GetByDisplayName(displayName string) (*domain.User, error) {
+	user := &domain.User{}
+	query := `
+		SELECT id, email, password_hash, display_name, bio, role, subscription_status, 
+			   stripe_customer_id, is_active, email_verified, created_at, updated_at
+		FROM users WHERE display_name = $1 AND is_active = true`
+
+	err := r.db.QueryRow(query, displayName).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.DisplayName, &user.Bio,
+		&user.Role, &user.SubscriptionStatus, &user.StripeCustomerID, &user.IsActive,
+		&user.EmailVerified, &user.CreatedAt, &user.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (r *UserRepository) SearchByDisplayName(query string) ([]domain.User, error) {
+	sqlQuery := `
+		SELECT id, email, password_hash, display_name, bio, role, subscription_status, 
+			   stripe_customer_id, is_active, email_verified, created_at, updated_at
+		FROM users 
+		WHERE display_name ILIKE '%' || $1 || '%' AND is_active = true
+		ORDER BY display_name
+		LIMIT 20`
+
+	rows, err := r.db.Query(sqlQuery, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []domain.User
+	for rows.Next() {
+		user := domain.User{}
+		err := rows.Scan(
+			&user.ID, &user.Email, &user.PasswordHash, &user.DisplayName, &user.Bio,
+			&user.Role, &user.SubscriptionStatus, &user.StripeCustomerID, &user.IsActive,
+			&user.EmailVerified, &user.CreatedAt, &user.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
+}

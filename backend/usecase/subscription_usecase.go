@@ -21,14 +21,18 @@ type SubscriptionUsecase struct {
 	priceID          string
 	webhookSecret    string
 	baseURL          string
+	mockMode         bool
 }
 
 func NewSubscriptionUsecase(
 	userRepo *repository.UserRepository,
 	subscriptionRepo *repository.SubscriptionRepository,
 	stripeAPIKey, priceID, webhookSecret, baseURL string,
+	mockMode bool,
 ) *SubscriptionUsecase {
-	stripe.Key = stripeAPIKey
+	if !mockMode {
+		stripe.Key = stripeAPIKey
+	}
 	return &SubscriptionUsecase{
 		userRepo:         userRepo,
 		subscriptionRepo: subscriptionRepo,
@@ -36,6 +40,7 @@ func NewSubscriptionUsecase(
 		priceID:          priceID,
 		webhookSecret:    webhookSecret,
 		baseURL:          baseURL,
+		mockMode:         mockMode,
 	}
 }
 
@@ -68,6 +73,57 @@ func (u *SubscriptionUsecase) CreateCheckoutSession(userID int) (string, error) 
 		return "", errors.New("user not found")
 	}
 
+	// Mock mode: return a mock URL and set user as active
+	if u.mockMode {
+		slog.Info("Mock mode: Creating checkout session", "user_id", userID)
+		
+		// Immediately activate the user subscription in mock mode
+		user.SubscriptionStatus = domain.UserSubscriptionStatusActive
+		err = u.userRepo.Update(user)
+		if err != nil {
+			slog.Error("Failed to update user subscription status in mock mode", "error", err)
+		}
+
+		// Create a mock subscription record
+		mockCustomerID := fmt.Sprintf("cus_mock_%d", userID)
+		user.StripeCustomerID = &mockCustomerID
+		err = u.userRepo.Update(user)
+		if err != nil {
+			slog.Error("Failed to update user with mock customer ID", "error", err)
+		}
+
+		// Create subscription record
+		sub := &domain.Subscription{
+			UserID:               userID,
+			StripeSubscriptionID: fmt.Sprintf("sub_mock_%d", userID),
+			Status:               domain.UserSubscriptionStatusActive,
+			CurrentPeriodStart:   time.Now(),
+			CurrentPeriodEnd:     time.Now().AddDate(0, 1, 0), // 1 month from now
+		}
+		
+		// Check if subscription already exists
+		existingSub, err := u.subscriptionRepo.GetByUserID(userID)
+		if err != nil {
+			// Create new subscription
+			err = u.subscriptionRepo.Create(sub)
+			if err != nil {
+				slog.Error("Failed to create mock subscription", "error", err)
+			}
+		} else {
+			// Update existing subscription
+			existingSub.Status = domain.UserSubscriptionStatusActive
+			existingSub.CurrentPeriodStart = time.Now()
+			existingSub.CurrentPeriodEnd = time.Now().AddDate(0, 1, 0)
+			err = u.subscriptionRepo.Update(existingSub)
+			if err != nil {
+				slog.Error("Failed to update mock subscription", "error", err)
+			}
+		}
+
+		return u.baseURL + "/subscription?success=true&mock=true", nil
+	}
+
+	// Real Stripe mode
 	// Create or get Stripe customer
 	var customerID string
 	if user.StripeCustomerID != nil {
@@ -119,6 +175,12 @@ func (u *SubscriptionUsecase) CreateCheckoutSession(userID int) (string, error) 
 }
 
 func (u *SubscriptionUsecase) HandleWebhook(eventType string, data interface{}) error {
+	// Mock mode: simulate webhook processing without actual Stripe events
+	if u.mockMode {
+		slog.Info("Mock mode: Simulating webhook", "type", eventType)
+		return nil
+	}
+
 	switch eventType {
 	case "checkout.session.completed":
 		return u.handleCheckoutSessionCompleted(data)
@@ -313,6 +375,12 @@ func (u *SubscriptionUsecase) findUserByStripeCustomerID(customerID string) (*do
 
 // Batch function to sync subscription statuses
 func (u *SubscriptionUsecase) SyncSubscriptionStatuses() error {
+	// Mock mode: skip sync as we don't have real Stripe data
+	if u.mockMode {
+		slog.Info("Mock mode: Skipping subscription status sync")
+		return nil
+	}
+
 	// Get all users with Stripe customer IDs
 	users, _, err := u.userRepo.GetAll(1, 1000)
 	if err != nil {
